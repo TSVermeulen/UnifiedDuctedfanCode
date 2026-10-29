@@ -10,7 +10,7 @@ This folder contains the relevant modules for the Genetic Algorithm (GA) impleme
 
 ## Module Structure
 
-```batch
+```bash
 .
 ├── README.md
 ├── __init__.py
@@ -23,10 +23,10 @@ This folder contains the relevant modules for the Genetic Algorithm (GA) impleme
 ├── main-parallelised-UNSGAIII.py
 ├── main-parallelised.py
 ├── main.py
-├── multi_point_problem_definition.py
+├── multi_point_problem_definition.py  # DEPRECATED, retained for backward compatibility
 ├── objectives.py
 ├── post.py
-├── problem_definition.py
+├── problem_definition.py  # Current implementation
 ├── repair.py
 ├── termination_conditions.py
 └── utils.py
@@ -47,8 +47,8 @@ This folder contains the relevant modules for the Genetic Algorithm (GA) impleme
 
 ## Genetic Algorithm Module Descriptions
 
-- *problem_definition.py*: Main class implementing the Pymoo single-point problem definition.
-- *multi_point_problem_definition.py*: Implementation of a multi-point pymoo problem definition.
+- *problem_definition.py*: Main class implementing the Pymoo problem definition.
+- *multi_point_problem_definition.py*: DEPRECATED - Implementation of a multi-point pymoo problem definition. Has now been implemented into the problem_definition.py module to form a generalised problem definition. Maintained for backwards compatibility.
 - *repair.py*: Implementation of a repair operator which corrects unphysical design vectors back to the physical design space.
 - *constraints.py*: Implementation of single- and multi-point constraints.
 - *objectives.py*: Implementation of different objectives. New objectives should be added here so that they can be selected within config.py.

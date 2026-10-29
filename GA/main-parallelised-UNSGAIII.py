@@ -107,13 +107,8 @@ if __name__ == "__main__":
         """ Initialise the optimisation problem and algorithm """
         # Initialise the optimisation problem by passing the configuration and
         # the starmap interface of the thread_pool
-        if hasattr(config, "PROBLEM_TYPE") and config.PROBLEM_TYPE == "multi_point":
-            from multi_point_problem_definition import MultiPointOptimizationProblem # type: ignore
-            problem = MultiPointOptimizationProblem(elementwise_runner=runner,
-                                                    seed=config.GLOBAL_SEED)
-        else:
-            problem = OptimisationProblem(elementwise_runner=runner,
-                                          seed=config.GLOBAL_SEED)
+        problem = OptimisationProblem(elementwise_runner=runner,
+                                      seed=config.GLOBAL_SEED)
 
         # Create the reference directions to be used for the optimisation
         ref_dirs = get_reference_directions("energy",

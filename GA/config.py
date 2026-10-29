@@ -326,7 +326,6 @@ MAX_ONE2ONE_ATTEMPTS = 200  # Maximum number of attempts to enforce one-to-one o
 
 # Problem controls
 ARCHIVE_STATEFILES = False  # Bool to control if the statefiles should be archived after each evaluation.
-PROBLEM_TYPE = "single_point"  # Either "single_point" or "multi_point". Defines the type of problem loaded in the main file.
 RESERVED_THREADS = 0  # Threads reserved for the operating system and any other programs.
 THREADS_PER_EVALUATION = 1  # Number of threads per MTFLOW evaluation: one for running MTSET/MTSOL/MTFLO and one for polling outputs
 
