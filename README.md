@@ -1,5 +1,7 @@
 # The Unified Ducted fan Code and Ducted Fan Optimisation Framework
 
+***Current Version: v2.2.0***
+
 This repository contains the codebase developed for the **Unified Ducted fan Code (UDC)** and its implementation into a ducted fan optimisation framework using the **Unified Non-dominated Sorting Genetic Algorithm III (U-NSGA-III)**.
 
 The UDC was first developed in T.S. Vermeulen's [MSc thesis](https://repository.tudelft.nl/record/uuid:21c8fb7b-f2d5-4c79-a43c-367cc1537764), and subsequently improved and expanded during the corresponding author's PhD project in late 2025/early 2026 to support the writing of a conference paper for the ASME 2026 Turbo Expo [1] and accompanying journal article in the Journal of Engineering for Gas Turbines and Power [2].
