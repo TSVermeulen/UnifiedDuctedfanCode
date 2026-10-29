@@ -1,5 +1,7 @@
 # The Unified Ducted fan Code and Ducted Fan Optimisation Framework
 
+***Current Version: v2.2.0***
+
 This repository contains the codebase developed for the **Unified Ducted fan Code (UDC)** and its implementation into a ducted fan optimisation framework using the **Unified Non-dominated Sorting Genetic Algorithm III (U-NSGA-III)**.
 
 The UDC was first developed in T.S. Vermeulen's [MSc thesis](https://repository.tudelft.nl/record/uuid:21c8fb7b-f2d5-4c79-a43c-367cc1537764), and subsequently improved and expanded during the corresponding author's PhD project in late 2025/early 2026 to support the writing of a conference paper for the ASME 2026 Turbo Expo [1] and accompanying journal article in the Journal of Engineering for Gas Turbines and Power [2].
@@ -44,10 +46,10 @@ For more details on the different (sub-)modules of the optimisation framework, p
 │   ├── main-parallelised-UNSGAIII.py
 │   ├── main-parallelised.py
 │   ├── main.py
-│   ├── multi_point_problem_definition.py
+│   ├── multi_point_problem_definition.py  # DEPRECATED, retained for backward compatibility
 │   ├── objectives.py
 │   ├── post.py
-│   ├── problem_definition.py
+│   ├── problem_definition.py  # Current implementation
 │   ├── README.md
 │   ├── repair.py
 │   ├── termination_conditions.py
@@ -139,10 +141,11 @@ To run **new optimisations**, users need to install MTFLOW. In order to access a
 
 To **load and visualise optimisation results**, users can run `./GA/post.py` (does not require MTFLOW), provided the respective settings in `./GA/config.py` and the relative path to the respective optimisation results `.dill` file (see documentation in `./GA/post.py`).
 
-**Keep in mind**
+## Important Notes and Comments
 
 - The UDC and optimisation framework have been designed to work on Windows. Since version 2.0, support has been added for Linux/Unix-like systems, which offer significant computational performance improvements.
-- For best performance, it is recommended to run the optimisation framework on a computer or server with as many CPU cores/threads as possible, since each thread can be used to run one analysis. Testing of the developer shows 16 analyses can be conducted simultaneously on an AMD Ryzen 5xxx 8-core/16-thread CPU. An average design takes between 3-45 seconds to evaluate in the UDC, depending on the design, operating conditions, hardware used, and operating system.  
+- Following UDCv2.2.0, the multi-point and single-point problem definition modules have been combined into a singular unified problem_definition.py module. In the written thesis, these are still separate files. The multi_point_problem_definition.py module is retained to maintain compatibility with published datasets generated using previous UDC versions.
+- For best performance, it is recommended to run the optimisation framework on a computer or server with as many CPU cores/threads as possible, since each thread can be used to run one analysis. Testing of the developer shows 16 analyses can be conducted simultaneously on an AMD Ryzen 5xxx 8-core/16-thread CPU. An average design takes between 3-45 seconds to evaluate in the UDC, depending on the design, (number of) operating conditions, hardware used, and operating system.  
 
 ## Author(s)
 
