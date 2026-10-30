@@ -325,9 +325,8 @@ PROFILE_FEASIBILITY_OFFSET = 0.05  # Offset value to avoid bezier control points
 MAX_ONE2ONE_ATTEMPTS = 200  # Maximum number of attempts to enforce one-to-one on the profile parameterisation.
 
 # Problem controls
-ARCHIVE_STATEFILES = False  # Bool to control if the statefiles should be archived after each evaluation.
-RESERVED_THREADS = 0  # Threads reserved for the operating system and any other programs.
-THREADS_PER_EVALUATION = 1  # Number of threads per MTFLOW evaluation: one for running MTSET/MTSOL/MTFLO and one for polling outputs
+RESERVE_THREAD = False  # Researve a thread for the operating system and any other programs.
+
 
 # Postprocessing visualisation controls
 # ref_objectives = np.array([-0.74376, 1])  # ref objective values for endurance cruise condition
