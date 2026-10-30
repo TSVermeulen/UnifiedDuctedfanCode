@@ -123,10 +123,11 @@ The `./Validation/` folder contains the data and summarised results used to vali
 To run the UDC or the developed optimisation framework, the dependencies listed below must be satisfied. A requirements.txt file is provided as part of this repository. To improve performance, it is suggested to install pymoo last during the installation process, using the following command, as per the instructions in the pymoo documentation. This attempts to install some of the Pymoo dependencies in compiled form, which may speed up analyses.
 
 ```console
-pip install -U pymoo==0.6.1.5
+pip install -U pymoo==0.6.2
 ```
 
-- Pymoo 0.6.1.5 (Optimisation framework only)
+- Pymoo 0.6.2 (Optimisation framework only)
+- joblib 1.6.0 (Optimisation framework only)
 - Ambiance 1.3.1
 - NumPy 2.2.1
 - SciPy 1.16.3
