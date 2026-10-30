@@ -32,24 +32,26 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 1.8
+Version: 1.8.1
 
 Changelog:
-- V1.0: Initial implementation with basic equality and inequality constraints.
-- V1.1: Implemented inequality constraint for efficiency such that eta is
-        always > 0.
-- V1.2: Normalised constraints, added 1<T/Tref<1.01 constraint, extracted
-        common power and thrust calculations to separate helper methods.
-- V1.3: Implemented multi-point constraint evaluator. Updated documentation.
-        Fixed type hinting.
-- V1.4: Implemented constraints on profile parameterisations.
-- V1.5: Fixed bug in minimum thrust constraint. Performance improvements by
-        avoiding repeated construction/lookup of data.
-- V1.6: Implemented theoretical efficiency limit calculation based on
-        actuator disk theory. Improved efficiency calculations.
-- V1.7: Added unified thrust bound constraint to replace the minimum and
-        maximum thrust constraints. Removed deprecated constraints.
-- V1.8: Removed unnecessary rounding of constraint values.
+- V1.0:   Initial implementation with basic equality and inequality constraints.
+- V1.1:   Implemented inequality constraint for efficiency such that eta is
+          always > 0.
+- V1.2:   Normalised constraints, added 1<T/Tref<1.01 constraint, extracted
+          common power and thrust calculations to separate helper methods.
+- V1.3:   Implemented multi-point constraint evaluator. Updated documentation.
+          Fixed type hinting.
+- V1.4:   Implemented constraints on profile parameterisations.
+- V1.5:   Fixed bug in minimum thrust constraint. Performance improvements by
+          avoiding repeated construction/lookup of data.
+- V1.6:   Implemented theoretical efficiency limit calculation based on
+          actuator disk theory. Improved efficiency calculations.
+- V1.7:   Added unified thrust bound constraint to replace the minimum and
+          maximum thrust constraints. Removed deprecated constraints.
+- V1.8:   Removed unnecessary rounding of constraint values.
+- V1.8.1: Formalised hidden constraint handling approach by setting
+          infeasible_CV=np.inf rather than 1e12.
 """
 
 # Import standard libraries
@@ -73,7 +75,7 @@ class Constraints:
 
 
     # Large constraint violation value to penalize infeasible designs
-    INFEASIBLE_CV = 1e12  # CV = Constraint Violation
+    INFEASIBLE_CV = np.inf  # CV = Constraint Violation
 
 
     def __init__(self,
