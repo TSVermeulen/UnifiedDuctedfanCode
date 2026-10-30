@@ -48,6 +48,7 @@ For more details on the different (sub-)modules of the optimisation framework, p
 │   ├── main.py
 │   ├── multi_point_problem_definition.py  # DEPRECATED, retained for backward compatibility
 │   ├── objectives.py
+│   ├── parallelisation.py
 │   ├── post.py
 │   ├── problem_definition.py  # Current implementation
 │   ├── README.md
