@@ -1,6 +1,7 @@
 # The Unified Ducted fan Code and Ducted Fan Optimisation Framework
 
 ***Current Version: v2.2.0***
+***Latest Release: v2.1.1***
 
 This repository contains the codebase developed for the **Unified Ducted fan Code (UDC)** and its implementation into a ducted fan optimisation framework using the **Unified Non-dominated Sorting Genetic Algorithm III (U-NSGA-III)**.
 
