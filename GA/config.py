@@ -104,6 +104,7 @@ geometry = load_json_data("geometry.json")
 
 REF_FRONTAL_AREA = geometry["REF_FRONTAL_AREA"]  # m^2
 ROTATING = geometry["ROTATING"]  # List of booleans indicating whether each stage is rotating or not
+NUM_STAGES = len(ROTATING)  # Number of stages in the ducted fan
 NUM_RADIALSECTIONS = geometry["NUM_RADIALSECTIONS"]  # Note that we cannot use more than 16 radial sections due to limitations of MTFLOW. Advice from the user manual: ~5 or less is good.
 BLADE_DIAMETERS = geometry["REFERENCE_STAGE_DIAMETERS"]  # m, reference diameters of the stages
 tipGap = geometry["TIP_GAP"]  # m, tip gap of the ducted fan
