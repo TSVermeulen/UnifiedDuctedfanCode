@@ -11,5 +11,7 @@
       "reference_power": 427701.24,
       "reference_thrust": 3318.98
     }
-  ]
+  ],
+  
+  "num_operating_points": 1
 }
