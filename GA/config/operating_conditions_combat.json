@@ -1,0 +1,17 @@
+{
+  "operating_conditions": [
+    {
+      "name": "combat",
+      "Altitude": 3048,
+      "Inlet_Mach": 0.3,
+      "N_crit": 9,
+      "Omega": -15.18868739,
+      "RPS": 58.5,
+      "flight_phase_time": 3600,
+      "reference_power": 427701.24,
+      "reference_thrust": 3318.98
+    }
+  ],
+  
+  "num_operating_points": 1
+}

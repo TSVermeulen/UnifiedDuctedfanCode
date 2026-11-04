@@ -1,0 +1,17 @@
+{
+  "operating_conditions": [
+    {
+      "name": "climb",
+      "Altitude": 0,
+      "Inlet_Mach": 0.125,
+      "N_crit": 9,
+      "Omega": -11.42397,
+      "RPS": 42,
+      "flight_phase_time": 900,
+      "reference_power": 497888.02,
+      "reference_thrust": 8316.67
+    }
+  ],
+  
+  "num_operating_points": 2
+}

@@ -1,0 +1,17 @@
+{
+  "operating_conditions": [
+    {
+      "name": "endurance",
+      "Altitude": 3048,
+      "Inlet_Mach": 0.2,
+      "N_crit": 9,
+      "Omega": -11.42397,
+      "RPS": 44,
+      "flight_phase_time": 6120,
+      "reference_power": 270063.53,
+      "reference_thrust": 3266.54
+    }
+  ],
+  
+  "num_operating_points": 1
+}
