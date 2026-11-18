@@ -648,10 +648,10 @@ class MTSOL_call:
                 line = ""
                 continue
 
-            if line.startswith('  Total power'):
+            if 'Total power' in line and 'CP' in line and 'EtaP' in line:
                 started_reading = True
                 forces_output.append(line)
-            elif line.startswith('                    CPK1'):
+            elif 'CPK1' in line:
                 # End of the usable section of the forces output,
                 # so break the loop
                 started_reading = False
@@ -959,6 +959,12 @@ class MTSOL_call:
         #If solver does not converge, call the non-convergence handler function.
         if exit_flag == ExitFlag.NON_CONVERGENCE:
             if handle_type == 'Inviscid':
+                # Preserve the current inviscid state and collect its forces
+                # before deciding whether to run the viscous solve. Returning
+                # here without collecting output leaves every output at zero.
+                self.WriteStateFile()
+                if generate_output:
+                    self.GenerateSolverOutput(output_type=output_type)
                 return
             if generate_output:
                 self.WriteStateFile()
