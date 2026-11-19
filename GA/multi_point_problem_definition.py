@@ -125,7 +125,7 @@ class MultiPointOptimizationProblem(ElementwiseProblem):
                                                'CTp': 0.00000,
                                                'Xtr': 0.00000}}}
 
-    _DESIGN_VARS = DesignVector.construct_vector(config)
+    _DESIGN_VARS = DesignVector.construct_vector()
 
     _base_oper = copy.deepcopy(config.multi_oper[0])
 
