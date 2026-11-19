@@ -39,7 +39,15 @@ For more details on the different (sub-)modules of the optimisation framework, p
 │   ├── __init__.py
 │   ├── checkpoint.py
 │   ├── config.py
-│   ├── config_original.py
+│   ├── config
+│   │   ├── baseline_design.json
+│   │   ├── geometry.json
+│   │   ├── operating_conditions.json
+│   │   ├── operating_conditions_climb.json
+│   │   ├── operating_conditions_combat.json
+│   │   ├── operating_conditions_endurance.json
+│   │   ├── operating_conditions_endurance_mission.json
+│   │   └── optimisation.json
 │   ├── constraints.py
 │   ├── design_vector_interface.py
 │   ├── init_designvector.py
@@ -111,7 +119,7 @@ For more details on the different (sub-)modules of the optimisation framework, p
 └── requirements.txt
 ```
 
-The `./GA/` folder contains the developed **ducted fan optimisation framework**. To execute an optimisation, the configuration needs to be set in `./GA/config.py`. An interface may then be chosen from `main.py`, `main-parallelised.py`, or `main-parallelised-UNSGAIII.py`, where the first and last implement the U-NSGA-III algorithm, while `main-parallelised.py` implements a basic "plain" genetic algorithm. For more details on the genetic algorithm implementation, see the dedicated README.
+The `./GA/` folder contains the developed **ducted fan optimisation framework**. To execute an optimisation, the configuration needs to be set in `./GA/config.py` and in the associated `.json` files in the `./GA/config/` subfolder. An interface may then be chosen from `main.py`, `main-parallelised.py`, or `main-parallelised-UNSGAIII.py`, where the first and last implement the U-NSGA-III algorithm, while `main-parallelised.py` implements a basic "plain" genetic algorithm. For more details on the genetic algorithm implementation, see the dedicated README.
 
 The `./Submodels/` folder contains 3 MTFLOW subprocess wrappers (MTSET, MTFLO and MTSOL), and processing scripts. For a description of the different programs within MTFLOW, the reader is referred to the [MTFLOW user manual](https://web.mit.edu/drela/Public/web/mtflow/mtflow.pdf).
 
@@ -147,7 +155,7 @@ To **load and visualise optimisation results**, users can run `./GA/post.py` (do
 ## Important Notes and Comments
 
 - The UDC and optimisation framework have been designed to work on Windows. Since version 2.0, support has been added for Linux/Unix-like systems, which offer significant computational performance improvements.
-- Following UDCv2.2.0, the multi-point and single-point problem definition modules have been combined into a singular unified problem_definition.py module. In the written thesis, these are still separate files. The multi_point_problem_definition.py module is retained to maintain compatibility with published datasets generated using previous UDC versions.
+- Following UDCv2.2.0, the multi-point and single-point problem definition modules have been combined into a singular unified problem_definition.py module. In the written thesis, these are still separate files. The multi_point_problem_definition.py module is retained to maintain compatibility with published datasets generated using previous UDC versions. Furthermore, the configuration has been updated to use the .json-based interface. The original config.py structure is maintained for backward compatibility.
 - For best performance, it is recommended to run the optimisation framework on a computer or server with as many CPU cores/threads as possible, since each thread can be used to run one analysis. Testing of the developer shows 16 analyses can be conducted simultaneously on an AMD Ryzen 5xxx 8-core/16-thread CPU. An average design takes between 3-45 seconds to evaluate in the UDC, depending on the design, (number of) operating conditions, hardware used, and operating system.  
 
 ## Author(s)

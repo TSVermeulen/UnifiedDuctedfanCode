@@ -7,10 +7,10 @@ Description
 This module provides performance analysis methods for a given ducted fan design.
 It evaluates aerodynamic performance across a tip set angles and rotational
 rates for a given operating condition. It generates performance plots showing
-thrust coefficient versus propulsor efficiency. Note that this module both 
-analyses and visualises the data. 
+thrust coefficient versus propulsor efficiency. Note that this module both
+analyses and visualises the data.
 
-The Analyzer class interfaces with the MTFLOW-based UDC (Unified Ducted fan 
+The Analyzer class interfaces with the MTFLOW-based UDC (Unified Ducted fan
 Code) to compute performance metrics.
 
 Notes
@@ -29,11 +29,12 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 1.1
+Version: 1.2
 
 Changelog:
 - V1.0: Initial implementation.
-- V1.1: Minor documentation updates ahead of publication. 
+- V1.1: Minor documentation updates ahead of publication.
+- V1.2: Updated for compatibility with new .json-based config.
 """
 
 # Import standard libraries
@@ -47,7 +48,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Enable submodel relative imports
-from GA.utils import ensure_repo_paths, get_figsize
+from GA.utils import ensure_repo_paths, get_figsize, load_json_data
 ensure_repo_paths()
 
 # Import interface submodels and other dependencies
@@ -110,8 +111,11 @@ class Analyzer:
         self.tip_angle_range = beta_tip  # Tip angle in radians
         self.RPS_range = rps_range
 
-        # Set the operating conditions from the config
-        self.oper = copy.deepcopy(config.multi_oper[0])
+        # Load configuration data
+        self.oper = copy.deepcopy(config.multi_oper)
+        self.geom = load_json_data("geometry.json")
+        self.opt_cfg = load_json_data("optimisation.json")
+        self.baseline_design = load_json_data("baseline_design.json")
 
         # Define key paths/directories
         self.parent_dir = Path(__file__).resolve().parent
@@ -244,9 +248,11 @@ class Analyzer:
             # Write the to be analysed angles and rotational rates to the
             # blading, overwriting the default values from the design vector.
             self.blade_blading_parameters[0]["RPS"] = RPS
-            self.blade_blading_parameters[0]["RPS_lst"] = [RPS] * len(config.multi_oper)
+            self.blade_blading_parameters[0]["RPS_lst"] = [RPS] * len(self.oper)
             self.blade_blading_parameters[0]["ref_blade_angle"] = self.tip_angle
-            self.blade_blading_parameters[0]["ref_blade_angle_lst"] = [self.tip_angle] * len(config.multi_oper)
+            self.blade_blading_parameters[0]["ref_blade_angles"] = [self.tip_angle] * len(self.oper)
+            for blading in self.blade_blading_parameters[1:]:
+                blading["ref_blade_angle"] = blading["ref_blade_angles"][0]
 
             # Set the non-dimensional omega rates
             self.ComputeOmega()
@@ -283,13 +289,13 @@ class Analyzer:
                 print(f"[{error_code}] Traceback:\n{traceback.format_exc()}")
 
         if not output_generated:
-            # Set parameters equal to the config values in case of a crash
+            # Set parameters equal to the baseline values in case of a crash
             # for downstream handling.
-            self.Lref = config.BLADE_DIAMETERS[0]
-            self.duct_variables = copy.copy(config.DUCT_VALUES)
-            self.centerbody_variables = copy.copy(config.CENTERBODY_VALUES)
-            self.blade_blading_parameters = copy.copy(config.STAGE_BLADING_PARAMETERS)
-            self.blade_design_parameters = copy.copy(config.STAGE_DESIGN_VARIABLES)
+            self.Lref = copy.copy(self.geom["REFERENCE_STAGE_DIAMETERS"][0])
+            self.duct_variables = copy.copy(self.baseline_design["DUCT_VALUES"])
+            self.centerbody_variables = copy.copy(self.baseline_design["CENTERBODY_VALUES"])
+            self.blade_blading_parameters = copy.copy(self.baseline_design["blading_parameters"])
+            self.blade_design_parameters = copy.copy(self.baseline_design["design_parameters"])
 
         return output_generated
 
@@ -370,6 +376,13 @@ class Analyzer:
                     'PC': PC,
                     'EtaP': EtaP
                 })
+
+                if self.verbose:
+                    print({'beta_tip': round(np.rad2deg(tip_angle), 2),
+                        'RPS': RPS,
+                        'TC': TC,
+                        'PC': PC,
+                        'EtaP': EtaP})
 
         # Create output dataframe
         output = pd.DataFrame(results)
@@ -467,7 +480,7 @@ class Analyzer:
 
 if __name__ == "__main__":
     # Create a reference vector for testing
-    # Change ref_vector to the desired design vector for analysis. 
+    # Change ref_vector to the desired design vector for analysis.
     from problem_definition import OptimisationProblem  # type: ignore
     from init_population import InitPopulation  # type: ignore
     from repair import RepairIndividuals  # type: ignore

@@ -32,7 +32,7 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 3.1
+Version: 3.2
 
 Changelog:
 - V1.0: Initial implementation with basic sub-objectives and placeholders for
@@ -45,6 +45,7 @@ Changelog:
         Improved efficiency of frontal area objective
 - V3.0: Renamed MTFLOW to UDC for consistency with written thesis.
 - V3.1: Removed unneccesary rounding.
+- V3.2: Updated module to use new .json based configuration.
 """
 
 # Import standard libraries
@@ -53,9 +54,8 @@ from typing import Any
 # Import 3rd party libraries
 import numpy as np
 
-# Import config module
-import config #type: ignore
-
+# Import utils module
+from utils import load_json_data #type: ignore
 
 # Define type alias for analysis outputs
 AnalysisOutputs = dict[str, dict[str, float] | dict[str, dict[str, float]]]
@@ -93,6 +93,9 @@ class Objectives:
         self.objectivelist = [self.Efficiency, self.FrontalArea,
                               self.WettedArea, self.PressureRatio]
         self.constant_objectiveIDs = {1, 2}
+
+        # Load config .json data
+        self.geom = load_json_data("geometry.json")
 
 
     def Efficiency(self,
@@ -165,7 +168,7 @@ class Objectives:
         upper_y = upper_y * chord
 
         # Compute the maximum radius
-        max_radius = self.duct_variables["Leading Edge Coordinates"][1] + \
+        max_radius = self.duct_variables["Leading Edge Y-Coordinate"] + \
             np.max(upper_y)
 
         # Since we deal with axisymmetric geometry, the frontal area is
@@ -175,7 +178,7 @@ class Objectives:
         # Return the frontal area normalised by the reference frontal area
         # in config. This is needed to ensure all objectives are of the
         # same order of magnitude and thus have equal weight to the GA.
-        return frontal_area / config.REF_FRONTAL_AREA
+        return frontal_area / self.geom["REF_FRONTAL_AREA"]
 
 
     def WettedArea(self,
@@ -246,6 +249,11 @@ class Objectives:
             time spent in the flight phase.
         """
 
+        # Compute energy of reference design
+        reference_energy = 0
+        for oper in self.oper:
+            reference_energy += oper["reference_power"] * oper["flight_phase_time"]
+
         if isinstance(outputs, list):
             # If outputs is a list, we are solving for a multi-point
             # optimisation problem, so we sum the total energ for all points.
@@ -255,7 +263,7 @@ class Objectives:
                     (0.5 * self.oper[idx]["atmos"].density[0] * \
                      self.oper[idx]["Vinl"] ** 3 * self.Lref ** 2)
                 energy += power * self.oper[idx]["flight_phase_time"] / \
-                    config.reference_energy
+                    reference_energy
         else:
             # If outputs is a single dictionary, we are solving for a
             # single-point optimisation problem.
@@ -263,7 +271,7 @@ class Objectives:
                 (0.5 * self.oper["atmos"].density[0] * self.oper["Vinl"] \
                  ** 3 * self.Lref ** 2)
             energy = power * self.oper["flight_phase_time"] / \
-                config.reference_energy
+                reference_energy
 
         return energy
 
@@ -379,6 +387,7 @@ class Objectives:
 
 if __name__ == "__main__":
     # Run a test of the objectives class
+    import config
 
     # Add the parent folder path to the system path
     import sys

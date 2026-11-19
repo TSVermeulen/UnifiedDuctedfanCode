@@ -44,7 +44,7 @@ Versioning
 ------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 2.1
+Version: 2.2
 
 Changelog:
 - V0.0:   File created with empty class as placeholder.
@@ -79,6 +79,8 @@ Changelog:
 - V2.0.5: Replaced empty output generation with reading of default zeroed output
           for performance. Minor QoL improvements throughout.
 - V2.1:   Added cross-platform support for Linux and Windows.
+- V2.2:   Fixeds bug in HandleExitFlag where inviscid nonconverged outputs were
+          not stored correctly.
 """
 
 # Import standard libraries

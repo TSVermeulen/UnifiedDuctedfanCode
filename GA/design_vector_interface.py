@@ -28,7 +28,7 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 2.1
+Version: 3.0
 
 Changelog:
 - V1.0: Initial implementation.
@@ -40,6 +40,7 @@ Changelog:
 - V2.1: Added support for config.OPTIMIZE_BLADETHICKNESS boolean.
         Reduces problem dimensionality by optionally optimising the blade
         thickness distributions.
+- V3.0: Updated module to use new .json based configuration.
 """
 
 # Import standard libraries
@@ -54,8 +55,8 @@ from utils import ensure_repo_paths  # type: ignore
 ensure_repo_paths()
 
 # Import interfacing modules
-import config  # type: ignore
 from Submodels.Parameterisations import AirfoilParameterisation  # type: ignore
+from utils import load_json_data # type: ignore
 _PARAMETERISATION = AirfoilParameterisation()
 
 class DesignVectorInterface:
@@ -75,23 +76,18 @@ class DesignVectorInterface:
         None
         """
 
-        # Import control variables
-        self.num_radial = config.NUM_RADIALSECTIONS
-        self.num_stages = config.NUM_STAGES
-        self.optimize_stages = config.OPTIMIZE_STAGE
-        self.optimize_bladethickness = config.OPTIMIZE_BLADETHICKNESS
-        self.rotating = config.ROTATING
-        self.tipGap = config.tipGap
-        self.optimize_centrebody = config.OPTIMIZE_CENTERBODY
-        self.optimize_duct = config.OPTIMIZE_DUCT
-
-
         # Initialize the AirfoilParameterisation class for slightly
         # better memory usage
         self.Parameterisation = _PARAMETERISATION
 
         # Initialize empty ordered keys cache
         self._ordered_keys_cache: list[str] | None = None
+
+        # Load configuration data
+        self.geom = load_json_data("geometry.json")
+        self.opt_cfg = load_json_data("optimisation.json")
+        self.baseline_design = load_json_data("baseline_design.json")
+        self.oper = load_json_data("operating_conditions.json")
 
 
     def ComputeDuctRadialLocation(self,
@@ -123,7 +119,8 @@ class DesignVectorInterface:
         """
 
         # Initialize data array for the radial duct coordinates to zeroes
-        radial_duct_coordinates = np.zeros(self.num_stages)
+        # Use ROTATING length since it is shorter to call compared to blading_params
+        radial_duct_coordinates = np.zeros(len(self.geom["ROTATING"]))
 
         # Compute the duct x,y coordinates. Note that we are only interested
         # in the lower surface.
@@ -132,7 +129,7 @@ class DesignVectorInterface:
         lower_y = lower_y * duct_variables["Chord Length"]
 
         # Shift the duct x coordinate to the correct location in space
-        lower_x += duct_variables["Leading Edge Coordinates"][0]
+        lower_x += duct_variables["Leading Edge X-Coordinate"]
 
         # Construct cubic spline interpolant of the duct surface
         # Defensively sorts the x coordinates to avoid a runtime failure
@@ -145,8 +142,8 @@ class DesignVectorInterface:
                                                    extrapolate=False)
 
         x_min, x_max = lower_x[order[0]], lower_x[order[-1]]
-        for i in range(self.num_stages):
-            if not self.rotating[i]:
+        for i in range(len(self.geom["ROTATING"])):
+            if not self.geom["ROTATING"][i]:
                 continue
 
             # Loop over the number of blade angles to account for variable
@@ -156,15 +153,13 @@ class DesignVectorInterface:
             # account for skew.
             blading = blade_blading_parameters[i]
             y_tip_LE = blading["radial_stations"][-1]
-            for angle in blading["ref_blade_angle_lst"]:
+            for angle in blading["ref_blade_angles"]:
                 # Compute the LE and TE x-coordinates of the tip section
                 sweep = np.tan(blading["sweep_angle"][-1])
                 x_tip_LE = blading["root_LE_coordinate"] + sweep * y_tip_LE
                 chi = np.pi/2 - (
                     blading["blade_angle"][-1]
-                    + angle -
-                    blading["reference_section_blade_angle"]
-                    )
+                    + angle)
                 projected_chord = blading["chord_length"][-1] * np.cos(chi)
                 x_tip_TE = x_tip_LE + projected_chord
 
@@ -173,7 +168,7 @@ class DesignVectorInterface:
                 # neglecting the effects of trailinge dge thickness
                 chord_into_plane = blading["chord_length"][-1] * np.sin(chi)
                 theta = np.atan2(chord_into_plane, blading["radial_stations"][-1])
-                y_TE = blading["radial_stations"][-1] + self.tipGap / np.cos(theta)
+                y_TE = blading["radial_stations"][-1] + self.geom["TIP_GAP"] / np.cos(theta)
 
                 # Compute the offsets for the LE and TE of the blade tip from
                 # the LE y-coordinate of the duct to the local y-coordinate of
@@ -188,7 +183,7 @@ class DesignVectorInterface:
                 # angle and overwrite the current guess if it is larger. Takes
                 # the maximum value for the LE & TE since a minimum gap must
                 # be enforced
-                LE_duct_position = y_tip_LE + self.tipGap + LE_offset
+                LE_duct_position = y_tip_LE + self.geom["TIP_GAP"] + LE_offset
                 TE_duct_position = y_TE + TE_offset
                 radial_duct_position = max(LE_duct_position, TE_duct_position)
                 if radial_duct_position > radial_duct_coordinates[i]:
@@ -200,15 +195,14 @@ class DesignVectorInterface:
         if radial_duct_coordinates.any():
             LE_coordinate_duct = float(radial_duct_coordinates.max())
         else:
-            LE_coordinate_duct = duct_variables["Leading Edge Coordinates"][1]
+            LE_coordinate_duct = duct_variables["Leading Edge Y-Coordinate"]
 
         # Update the duct variables
-        duct_variables["Leading Edge Coordinates"] = (duct_variables["Leading Edge Coordinates"][0],
-                                                      LE_coordinate_duct)
+        duct_variables["Leading Edge Y-Coordinate"] = LE_coordinate_duct
 
         # Set the radius of all stators
-        for i in range(self.num_stages):
-            if self.rotating[i]:
+        for i in range(len(self.geom["ROTATING"])):
+            if self.geom["ROTATING"][i]:
                 continue
 
             blading = blade_blading_parameters[i]
@@ -216,32 +210,37 @@ class DesignVectorInterface:
 
             # Set the stator diameter to enforce it to be inside of the duct.
             x_tip_LE = blading["root_LE_coordinate"] + np.tan(blading["sweep_angle"][-1]) * r_tip
-            chi = np.pi/2 - (
-                blading["blade_angle"][-1]
-                + blading["ref_blade_angle"]
-                - blading["reference_section_blade_angle"]
-                )
-            projected_chord = blading["chord_length"][-1] * np.cos(chi)
-            x_tip_TE = x_tip_LE + projected_chord
 
-            # Compute the offsets for the LE and TE of the stator tip from
-            # surface of the duct.
-            # Sets to zero if the duct does not lie above the LE/TE.
-            LE_offset = 0 if not (x_min <= x_tip_LE <= x_max) else \
-                float(duct_interpolant(x_tip_LE))
-            TE_offset = 0 if not (x_min <= x_tip_TE <= x_max) else \
-                float(duct_interpolant(x_tip_TE))
+            # Loop over the different tip angles in case of variable pitch
+            # stators to find the correct stator radius
+            delta_r = 0
+            for angle in blading["ref_blade_angles"]:
+                chi = np.pi/2 - (
+                    blading["blade_angle"][-1] + angle)
+                projected_chord = blading["chord_length"][-1] * np.cos(chi)
+                x_tip_TE = x_tip_LE + projected_chord
 
-            # Compute the required radius of the stator blade to ensure duct
-            # is attached to stator.
-            delta_r = float(max(LE_offset, TE_offset))
+                # Compute the offsets for the LE and TE of the stator tip from
+                # surface of the duct.
+                # Sets to zero if the duct does not lie above the LE/TE.
+                LE_offset = 0 if not (x_min <= x_tip_LE <= x_max) else \
+                    float(duct_interpolant(x_tip_LE))
+                TE_offset = 0 if not (x_min <= x_tip_TE <= x_max) else \
+                    float(duct_interpolant(x_tip_TE))
+
+                # Compute the required radius of the stator blade to ensure duct
+                # is attached to stator. and check if it is larger than the
+                # current value
+                offset = float(max(LE_offset, TE_offset))
+                delta_r = max(delta_r, offset)
+
             r = LE_coordinate_duct + delta_r if delta_r > 0 else LE_coordinate_duct
 
             # Scale all stator radial stations to match the new required radius
             if r_tip != 0:
                 # Simple guard against r=0
                 blade_blading_parameters[i]["radial_stations"] = \
-                    blade_blading_parameters[i]["radial_stations"] / r_tip * r
+                    (np.array(blade_blading_parameters[i]["radial_stations"]) / r_tip * r).tolist()
             else:
                 # If the last entry of radial stations is 0, simply set it
                 # to the radial coordinate locally of the duct lower surface.
@@ -334,14 +333,14 @@ class DesignVectorInterface:
         # Define a pointer to count the number of variable parameters
         centerbody_designvar_count = 8
         duct_designvar_count = 17
-        section_designvar_count = 15 if self.optimize_bladethickness else 8
+        section_designvar_count = 15 if self.opt_cfg["OPTIMISE_BLADETHICKNESS"] else 8
 
         # Deconstruct the centerbody values if it's variable.
-        # If the centerbody is constant, read in the centerbody values from
-        # config. Note that if the centerbody is variable, we keep the LE
+        # If the centerbody is constant, use reference centerbody values.
+        # Note that if the centerbody is variable, we keep the LE
         # coordinate fixed, as the LE coordinate of the duct would already be
         # free to move.
-        if self.optimize_centrebody:
+        if self.opt_cfg["OPTIMISE_CENTERBODY"]:
             try:
                 centerbody_vals = [next(it) for _ in range(centerbody_designvar_count)]
             except StopIteration:
@@ -362,13 +361,13 @@ class DesignVectorInterface:
                                     "trailing_camberline_angle": 0,
                                     "leading_edge_direction": 0,
                                     "Chord Length": centerbody_vals[7],
-                                    "Leading Edge Coordinates": (0, 0)}
+                                    "Leading Edge X-Coordinate": 0}
         else:
-            centerbody_variables = copy.deepcopy(config.CENTERBODY_VALUES)
+            centerbody_variables = copy.deepcopy(self.baseline_design["CENTERBODY_VALUES"])
 
         # Deconstruct the duct values if it's variable.
-        # If the duct is constant, read in the duct values from config.
-        if self.optimize_duct:
+        # If the duct is constant, read in the reference duct values.
+        if self.opt_cfg["OPTIMISE_DUCT"]:
             try:
                 duct_vals = [next(it) for _ in range(duct_designvar_count)]
             except StopIteration:
@@ -389,28 +388,28 @@ class DesignVectorInterface:
                               "trailing_camberline_angle": duct_vals[13],
                               "leading_edge_direction": duct_vals[14],
                               "Chord Length": duct_vals[15],
-                              "Leading Edge Coordinates": (duct_vals[16], 0)}
+                              "Leading Edge X-Coordinate": duct_vals[16]}
         else:
-            duct_variables = copy.deepcopy(config.DUCT_VALUES)
+            duct_variables = copy.deepcopy(self.baseline_design["DUCT_VALUES"])
 
         # Deconstruct the rotorblade parameters if they are variable.
-        # If the rotorblade parameters are constant, read in the parameters
-        # from config.
+        # If the rotorblade parameters are constant, read in the reference
+        # parameters.
         blade_design_parameters = []
-        for stage in range(self.num_stages):
+        for stage in range(len(self.geom["ROTATING"])):
             # Initiate empty list for each stage
             stage_design_parameters = []
-            if self.optimize_stages[stage]:
+            if self.opt_cfg["OPTIMISE_STAGE"][stage]:
                 # If the stage is to be optimized, read in the design vector
                 # for the blade profiles
-                for section in range(self.num_radial[stage]):
+                for section in range(self.geom["NUM_RADIALSECTIONS"][stage]):
                     # Loop over the number of radial sections and append each
                     # section to stage_design_parameters
                     try:
                         section_vals = [next(it) for _ in range(section_designvar_count)]
                     except StopIteration:
                         raise ValueError(f"Design vector too short for blade radial section variables. Expected {section_designvar_count} variables") from None
-                    if self.optimize_bladethickness:
+                    if self.opt_cfg["OPTIMISE_BLADETHICKNESS"]:
                         section_parameters = {"b_0": section_vals[0],
                                               "b_2": section_vals[1],
                                               "b_8": self.Getb8(section_vals[2], section_vals[11], section_vals[5], section_vals[6]),
@@ -432,32 +431,33 @@ class DesignVectorInterface:
                         # from the reference design
                         section_parameters = {"b_0": section_vals[0],
                                               "b_2": section_vals[1],
-                                              "b_8": config.STAGE_DESIGN_VARIABLES[stage][section]["b_8"],
-                                              "b_15": config.STAGE_DESIGN_VARIABLES[stage][section]["b_15"],
+                                              "b_8": self.baseline_design["design_parameters"][stage][section]["b_8"],
+                                              "b_15": self.baseline_design["design_parameters"][stage][section]["b_15"],
                                               "b_17": section_vals[2],
-                                              "x_t": config.STAGE_DESIGN_VARIABLES[stage][section]["x_t"],
-                                              "y_t": config.STAGE_DESIGN_VARIABLES[stage][section]["y_t"],
+                                              "x_t": self.baseline_design["design_parameters"][stage][section]["x_t"],
+                                              "y_t": self.baseline_design["design_parameters"][stage][section]["y_t"],
                                               "x_c": section_vals[3],
                                               "y_c": section_vals[4],
                                               "z_TE": section_vals[5],
-                                              "dz_TE": config.STAGE_DESIGN_VARIABLES[stage][section]["dz_TE"],
-                                              "r_LE": config.STAGE_DESIGN_VARIABLES[stage][section]["r_LE"],
-                                              "trailing_wedge_angle": config.STAGE_DESIGN_VARIABLES[stage][section]["trailing_wedge_angle"],
+                                              "dz_TE": self.baseline_design["design_parameters"][stage][section]["dz_TE"],
+                                              "r_LE": self.baseline_design["design_parameters"][stage][section]["r_LE"],
+                                              "trailing_wedge_angle": self.baseline_design["design_parameters"][stage][section]["trailing_wedge_angle"],
                                               "trailing_camberline_angle": section_vals[6],
                                               "leading_edge_direction": section_vals[7]}
                     stage_design_parameters.append(section_parameters)
             else:
-                # If the stage is meant to be constant, read it in from config.
-                stage_design_parameters = copy.deepcopy(config.STAGE_DESIGN_VARIABLES[stage])
+                # If the stage is meant to be constant, read it in from
+                # reference.
+                stage_design_parameters = copy.deepcopy(self.baseline_design["design_parameters"][stage])
+
             # Write the stage nested list to blade_design_parameters
             blade_design_parameters.append(stage_design_parameters)
 
         blade_blading_parameters = []
-        num_operating_conditions = len(config.multi_oper)
-        for stage in range(self.num_stages):
+        for stage in range(len(self.geom["ROTATING"])):
             # Initiate empty list for each stage
             stage_blading_parameters = {}
-            if self.optimize_stages[stage]:
+            if self.opt_cfg["OPTIMISE_STAGE"][stage]:
                 # If the stage is to be optimized, read in the design vector
                 # for the blading parameters
                 stage_blading_parameters["root_LE_coordinate"] = next(it)
@@ -465,30 +465,26 @@ class DesignVectorInterface:
                 ref_blade_angle_lst = []
                 # Allow for multi-point variable pitch AND fixed pitch analyses
                 # by simply reading in the appropriate number of angles
-                for _ in range(len(config.STAGE_BLADING_PARAMETERS[stage]["ref_blade_angle_lst"])):
+                for _ in range(len(self.baseline_design["blading_parameters"][stage]["ref_blade_angles_deg"])):
                     ref_blade_angle_lst.append(next(it))
 
                 # Check consistency of the amount of tip angles against the
                 # analysis being performed
-                if len(ref_blade_angle_lst) not in (1, num_operating_conditions):
+                if len(ref_blade_angle_lst) not in (1, self.oper["num_operating_points"]):
                     raise ValueError(
-                        f"ref_blade_angle count {len(ref_blade_angle_lst)} != operating points {num_operating_conditions} "
+                        f"ref_blade_angle count {len(ref_blade_angle_lst)} != operating points {self.oper["num_operating_points"]} "
                         f"(stage {stage}). Provide either 1 (fixed pitch) or one per operating point."
                     )
 
-                stage_blading_parameters["ref_blade_angle_lst"] = ref_blade_angle_lst
-                stage_blading_parameters["ref_blade_angle"] = ref_blade_angle_lst[0]  # Initialise to the first pitch angle
+                stage_blading_parameters["ref_blade_angles"] = ref_blade_angle_lst
 
-                stage_blading_parameters["reference_section_blade_angle"] = 0  # We take the blade tip as reference section, so the angle is zero.
                 stage_blading_parameters["blade_count"] = int(next(it))
-                stage_blading_parameters["RPS_lst"] = [next(it) if self.rotating[stage] else 0 for _ in range(num_operating_conditions)]
-                stage_blading_parameters["RPS"] = 0  # Initialize the RPS at zero - this will be overwritten later by the appropriate RPS for the operating condition.
-                stage_blading_parameters["rotational_rate"] = 0  # Initialize the UDC non-dimensional rotational rate to zero - this will be overwritten later by the appropriate Omega within the problem definition.
-                stage_blading_parameters["radial_stations"] = np.linspace(0, 0.5 * next(it), self.num_radial[stage])  # Radial stations are defined as fraction of blade radius * local radius
+                stage_blading_parameters["RPS_lst"] = [next(it) if self.geom["ROTATING"][stage] else 0 for _ in range(self.oper["num_operating_points"])]
+                stage_blading_parameters["radial_stations"] = np.linspace(0, 0.5 * next(it), self.geom["NUM_RADIALSECTIONS"][stage])  # Radial stations are defined as fraction of blade radius * local radius
 
                 # Extract sectional blading parameter lists
                 root_chord = next(it)
-                taper_distribution = [next(it) for _ in range(self.num_radial[stage] - 1)]
+                taper_distribution = [next(it) for _ in range(self.geom["NUM_RADIALSECTIONS"][stage] - 1)]
                 stage_blading_parameters["root_chord"] = root_chord
                 stage_blading_parameters["taper_distribution"] = taper_distribution
 
@@ -496,12 +492,31 @@ class DesignVectorInterface:
                 stage_blading_parameters["chord_length"] = chord_distribution.tolist()
 
                 sweep_angle = [0]
-                sweep_angle.extend([next(it) for _ in range(self.num_radial[stage] - 1)])  # -1 since the root is independent of sweep
+                sweep_angle.extend([next(it) for _ in range(self.geom["NUM_RADIALSECTIONS"][stage] - 1)])  # -1 since the root is independent of sweep
                 stage_blading_parameters["sweep_angle"] = sweep_angle
-                stage_blading_parameters["blade_angle"] = [next(it) for _ in range(self.num_radial[stage] - 1)]  # -1 since we fix the angle at the tip to zero to simplify the design.
+                stage_blading_parameters["blade_angle"] = [next(it) for _ in range(self.geom["NUM_RADIALSECTIONS"][stage] - 1)]  # -1 since we fix the angle at the tip to zero to simplify the design.
                 stage_blading_parameters["blade_angle"].append(0)  # Append the tip angle of zero to the list
             else:
-                stage_blading_parameters = copy.deepcopy(config.STAGE_BLADING_PARAMETERS[stage])
+                stage_blading_parameters = copy.deepcopy(self.baseline_design["blading_parameters"][stage])
+
+                stage_blading_parameters["sweep_angle"] = np.deg2rad(stage_blading_parameters["sweep_angle_deg"]).tolist()
+                stage_blading_parameters.pop("sweep_angle_deg", None)
+                stage_blading_parameters["ref_blade_angles"] = np.deg2rad(stage_blading_parameters["ref_blade_angles_deg"]).tolist()
+                stage_blading_parameters.pop("ref_blade_angles_deg", None)
+                stage_blading_parameters["blade_angle"] = np.deg2rad(stage_blading_parameters["blade_angle_deg"]).tolist()
+                stage_blading_parameters.pop("blade_angle_deg", None)
+                stage_blading_parameters["chord_length"] = np.cumprod([stage_blading_parameters["root_chord"],
+                                                                       *stage_blading_parameters["taper_distribution"]]).tolist()
+
+                if not self.geom["ROTATING"][stage]:
+                    # Stator does not rotate so simply write zeros
+                    stage_blading_parameters["RPS_lst"] = [0] * self.oper["num_operating_points"]
+                else:
+                    # Load the RPS value from each oper dictionary
+                    RPS_lst = []
+                    for oper in self.oper["operating_conditions"]:
+                        RPS_lst.extend(oper["RPS"])
+                    stage_blading_parameters["RPS_lst"] = RPS_lst
 
             # Append the stage blading parameters to the main list
             blade_blading_parameters.append(stage_blading_parameters)
@@ -573,51 +588,51 @@ class DesignVectorInterface:
             """
             Return the standard 15-var profile section definition.
             """
-            return [profile["b_0"],  # b_0
-                    profile["b_2"],  # b_2
-                    extract_b8_map(profile),  # b_8_map
-                    profile["b_15"],  # b_15
-                    profile["b_17"],  # b_17
-                    profile["x_t"],  # x_t
-                    profile["y_t"],  # y_t
-                    profile["x_c"],  # x_c
-                    profile["y_c"],  # y_c
-                    profile["z_TE"],  # z_TE
-                    profile["dz_TE"],  # dz_TE
-                    profile["r_LE"],  # r_LE
-                    profile["trailing_wedge_angle"],  # trailing_wedge_angle
-                    profile["trailing_camberline_angle"],  # trailing_camberline_angle
+            return [profile["b_0"],
+                    profile["b_2"],
+                    extract_b8_map(profile),
+                    profile["b_15"],
+                    profile["b_17"],
+                    profile["x_t"],
+                    profile["y_t"],
+                    profile["x_c"],
+                    profile["y_c"],
+                    profile["z_TE"],
+                    profile["dz_TE"],
+                    profile["r_LE"],
+                    profile["trailing_wedge_angle"],
+                    profile["trailing_camberline_angle"],
                     profile["leading_edge_direction"]]
 
         # Initialize variable list
         vector = []
 
-        if config.OPTIMIZE_CENTERBODY:
+        if self.opt_cfg["OPTIMISE_CENTERBODY"]:
             # If the centerbody is to be optimised, reconstruct the
             # corresponding variable section.
-            vector.append(extract_b8_map(centerbody_variables))  # b_8_map
-            vector.append(centerbody_variables["b_15"])  # b_15
-            vector.append(centerbody_variables["x_t"])  # x_t
-            vector.append(centerbody_variables["y_t"])  # y_t
-            vector.append(centerbody_variables["dz_TE"])  # dz_TE
-            vector.append(centerbody_variables["r_LE"])  # r_LE
-            vector.append(centerbody_variables["trailing_wedge_angle"])  # trailing_wedge_angle
-            vector.append(centerbody_variables["Chord Length"])  # Chord Length
+            vector.append(extract_b8_map(centerbody_variables))
+            vector.append(centerbody_variables["b_15"])
+            vector.append(centerbody_variables["x_t"])
+            vector.append(centerbody_variables["y_t"])
+            vector.append(centerbody_variables["dz_TE"])
+            vector.append(centerbody_variables["r_LE"])
+            vector.append(centerbody_variables["trailing_wedge_angle"])
+            vector.append(centerbody_variables["Chord Length"])
 
-        if config.OPTIMIZE_DUCT:
+        if self.opt_cfg["OPTIMISE_DUCT"]:
             # If the duct is to be optimised, reconstruct the corresponding variable section.
             vector.extend(profile_section_vars(duct_variables))
-            vector.append(duct_variables["Chord Length"])  # Chord Length
-            vector.append(duct_variables["Leading Edge Coordinates"][0])  # Leading Edge X-Coordinate
+            vector.append(duct_variables["Chord Length"])
+            vector.append(duct_variables["Leading Edge X-Coordinate"])
 
-        for i, optimize_stage in enumerate(config.OPTIMIZE_STAGE):
+        for i, optimize_stage in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
             # If (any of) the rotor/stator stage(s) are to be optimised,
             # reconstruct the design variables for the profiles
             if optimize_stage:
-                for j in range(config.NUM_RADIALSECTIONS[i]):
+                for j in range(self.geom["NUM_RADIALSECTIONS"][i]):
                     # Loop over the number of radial sections and append each
                     # section to stage_design_parameters
-                    if self.optimize_bladethickness:
+                    if self.opt_cfg["OPTIMISE_BLADETHICKNESS"]:
                         # If the full profile parameterisation is used, simply add the dictionary values
                         profile = profile_section_vars(blade_design_parameters[i][j])
                         vector.extend(profile)
@@ -635,18 +650,18 @@ class DesignVectorInterface:
                                    blade_design_parameters[i][j]["leading_edge_direction"]]
                         vector.extend(profile)
 
-        for i, opt_stage in enumerate(config.OPTIMIZE_STAGE):
+        for i, opt_stage in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
             # Loop over the stages and write the blading parameters to the
             # design vector
             if opt_stage:
                 # If the stage is to be optimised, read in the design vector
                 # for the blading parameters
-                vector.append(blade_blading_parameters[i]["root_LE_coordinate"])  # root_LE_coordinate
-                for angle in blade_blading_parameters[i]["ref_blade_angle_lst"]:
+                vector.append(blade_blading_parameters[i]["root_LE_coordinate"])
+                for angle in blade_blading_parameters[i]["ref_blade_angles"]:
                     vector.append(angle)  # Enables variable pitch to be used.
 
-                vector.append(int(blade_blading_parameters[i]["blade_count"]))  # blade_count
-                if self.rotating[i]:
+                vector.append(int(blade_blading_parameters[i]["blade_count"]))
+                if self.geom["ROTATING"][i]:
                     vector.extend([RPS for RPS in blade_blading_parameters[i]["RPS_lst"]])  # blade RPS
                 vector.append(blade_blading_parameters[i]["radial_stations"][-1] * 2)  # blade diameter
 

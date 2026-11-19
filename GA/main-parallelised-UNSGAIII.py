@@ -5,8 +5,8 @@ main-parallelised-UNSGAIII
 Description
 -----------
 This module defines the main entry point for running a multi-threaded
-optimisation problem using the pymoo framework. Uses a joblib parallelisation 
-technique. Uses the Unified-Nondominated Sorting Genetic Algorithm 3 
+optimisation problem using the pymoo framework. Uses a joblib parallelisation
+technique. Uses the Unified-Nondominated Sorting Genetic Algorithm 3
 with the mixed-variable implementation.
 
 Functionality
@@ -41,7 +41,7 @@ Version: 2.0
 Changelog:
 - V1.0: Initial implementation.
 - V1.5: Updated naming convention for output file, revamped upper thread limit
-- V2.0: Updated to pymoo 0.6.2 and switched to joblib parallelisation. 
+- V2.0: Updated to pymoo 0.6.2 and switched to joblib parallelisation.
         Added checkpointing.
 """
 
@@ -62,7 +62,8 @@ from utils import ensure_repo_paths, calculate_n_reference_points # type: ignore
 ensure_repo_paths()
 
 # Import interface submodels and other dependencies
-import config # type: ignore
+import config #type: ignore
+from utils import load_json_data #type: ignore
 from problem_definition import OptimisationProblem # type: ignore
 from init_population import InitPopulation # type: ignore
 from termination_conditions import GetTerminationConditions # type: ignore
@@ -71,8 +72,11 @@ from checkpoint import CheckpointCallBack # type: ignore
 from parallelisation import JoblibParallelisation # type: ignore
 
 if __name__ == "__main__":
+    # Load configuration
+    opt_cfg = load_json_data("optimisation.json")
+
     """ Initialise the joblib runner """
-    if config.RESERVE_THREAD:
+    if opt_cfg["RESERVE_THREAD"]:
         n_jobs = -2  # Leave one core free
     else:
         n_jobs = -1  # Use all available cores
@@ -86,7 +90,7 @@ if __name__ == "__main__":
     # Initialise the optimisation problem by passing the configuration and
     # the runner
     problem = OptimisationProblem(elementwise_runner=runner,
-                                  seed=config.GLOBAL_SEED)
+                                  seed=opt_cfg["GLOBAL_SEED"])
 
     # Create the reference directions to be used for the optimisation
     ref_dirs = get_reference_directions("energy",
@@ -97,11 +101,11 @@ if __name__ == "__main__":
     duplicate_elimination = MixedVariableDuplicateElimination()
     selection_operator = TournamentSelection(func_comp=comp_by_rank_and_ref_line_dist)
     algorithm = UNSGA3(ref_dirs=ref_dirs,
-                       pop_size=config.POPULATION_SIZE,
+                       pop_size=opt_cfg["POPULATION_SIZE"],
                        mating=MixedVariableMating(selection=selection_operator,  # type: ignore
                                                   eliminate_duplicates=duplicate_elimination,  # type: ignore
                                                   repair=RepairIndividuals()),
-                       sampling=InitPopulation(seed=config.GLOBAL_SEED).GeneratePopulation(),
+                       sampling=InitPopulation(seed=opt_cfg["GLOBAL_SEED"]).GeneratePopulation(),
                        eliminate_duplicates=duplicate_elimination,
                        selection=selection_operator,
                        repair=RepairIndividuals()
@@ -111,8 +115,8 @@ if __name__ == "__main__":
     res = minimize(problem,
                    algorithm,
                    termination=GetTerminationConditions(),
-                   callback=CheckpointCallBack(interval=config.CHECKPOINT_INTERVAL),
-                   seed=config.GLOBAL_SEED,
+                   callback=CheckpointCallBack(interval=opt_cfg["CHECKPOINT_INTERVAL"]),
+                   seed=opt_cfg["GLOBAL_SEED"],
                    verbose=True,
                    save_history=True,
                    return_least_infeasible=True)
@@ -131,7 +135,7 @@ if __name__ == "__main__":
 
     now = datetime.datetime.now()
     timestamp = f"{now:%y%m%d%H%M%S%f}"
-    output_name = results_dir / f"res_pop{config.POPULATION_SIZE}_eval{config.MAX_GENERATIONS}_{timestamp}.dill"
+    output_name = results_dir / f"res_pop{opt_cfg["POPULATION_SIZE"]}_eval{opt_cfg["MAX_GENERATIONS"]}_{timestamp}.dill"
     try:
         with open(output_name, 'wb') as f:
             dill.dump(res, f)

@@ -30,8 +30,8 @@ Changelog:
         re-running the function at every GA worker import.
 - V1.3: Updated single point operating condition to correspond to endurance cruise condition at approximate mid cruise weight and endurance speed of 125kts at 10000ft standard day.
 - V1.4: Updated operating conditions. Improved consistency. Added additional inputs.
-- V1.5: Started migration towards .json based configuration. 
-        Formatted for backwards compatibility. 
+- V1.5: Started migration towards .json based configuration.
+        Formatted for backwards compatibility.
 """
 
 # Import standard libraries
@@ -69,7 +69,7 @@ for oper_dict in multi_oper:
 class ObjectiveID(IntEnum):
     """
     Enumeration of objective function identifiers for the optimisation problem.
-    Each member represents a different optimisation objective that can be used 
+    Each member represents a different optimisation objective that can be used
     in the genetic algorithm's fitness evaluation.
     """
     @staticmethod
