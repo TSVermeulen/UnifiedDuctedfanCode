@@ -4,8 +4,9 @@ problem_definition
 
 Description
 -----------
-This module defines an optimisation problem for the pymoo framework, based on
-the ElementwiseProblem parent class.
+This module defines the optimisation problem class for both singlepoint and
+multipoint optimisations using the Pymoo framework, based on the
+ElementwiseProblem parent class.
 
 Classes
 -------
@@ -14,56 +15,43 @@ OptimisationProblem(ElementwiseProblem)
 
 Examples
 --------
->>> problem = OptimisationProblem()
->>> out = {}
->>> problem._evaluate(1, out)
+See bottom of file for example usage, including reference vector generation.
 
 Notes
 -----
 This module integrates with the UDC for aerodynamic analysis. Ensure that the
 executable and required input files are present in the appropriate directories.
-The module is designed to handle mixed-variable optimisation problems, including
-real and integer variables.
+The module is designed to handle mixed-variable optimisation problems,
+including real and integer variables.
 
 References
 ----------
-For more details on the MTFLOW solver integrated in the UDC and its input/output
-requirements, refer to the MTFLOW user manual:
+For more details on the MTFLOW solver integrated in the UDC and its
+input/output requirements, refer to the MTFLOW user manual:
 https://web.mit.edu/drela/Public/web/mtflow/mtflow.pdf
 
 Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 2.1
+Version: 3.0
 
 Changelog:
-- V1.0:   Initial implementation.
-- V1.1:   Improved documentation. Fixed issues with deconstruction of design
-          vector. Fixed analysisname generator and switched to using datetime &
-          evaluation counter for name generation.
-- V1.1.5: Changed analysis name generation to only use datetime to simplify
-          naming generation.
-- V1.1.6: Updated to remove iter_count from MTFLOW_caller outputs.
-- V1.2:   Extracted design vector handling to separate file/class.
-- V1.3:   Removed troublesome cache implementation. Cleaned up _evaluate method.
-          Created default crash output dictionary to avoid repeated reading of
-          crash_outputs forces file. Adjusted GenerateAnalysisName method to
-          use 8-char uuid. Updated ComputeOmega method to write omega to the
-          blading lists rather than to the oper dictionary.
-- V1.4:   Improved robustness of crash handling in MTFLOW. Added conditional
-          dump folder generation to avoid unnecessary folder creation.
-- V2.0:   Renamed MTFLOW_caller to UDC for consistency with written thesis.
-          Updated imports to reflect new structure.
-- V2.1:   Updated documentation and formatting. Improved type hints.
-          Cleaned up old imports.
+- V1.0: Initial implementation.
+- V2.0: Renamed MTFLOW_caller to UDC for consistency with written thesis.
+        Updated imports to reflect new structure.
+- V2.1: Updated formatting. Implemented variable pitch.
+- V3.0: Combined problem_definition and multi_point_problem_definition into a
+        single class for simplicity. Removed legacy ARCHIVE_STATEFILES option.
+        Verified same results with original single/multipoint problem
+        definitions.
 """
 
 # Import standard libraries
 import os
 import uuid
-import copy
 import datetime
+import copy
 import contextlib
 from pathlib import Path
 
@@ -83,6 +71,7 @@ from init_designvector import DesignVector  # type: ignore
 from design_vector_interface import DesignVectorInterface  # type: ignore
 import config  # type: ignore
 
+
 class OptimisationProblem(ElementwiseProblem):
     """
     Class definition of the optimisation problem to be solved using the genetic
@@ -91,12 +80,8 @@ class OptimisationProblem(ElementwiseProblem):
     """
 
     # Define the file names relevant for UDC
-    FILE_TEMPLATES = {"walls": "walls.{}",
-                      "tflow": "tflow.{}",
-                      "forces": "forces.{}",
-                      "flowfield": "flowfield.{}",
-                      "boundary_layer": "boundary_layer.{}",
-                      "tdat": "tdat.{}"}
+    FILE_TEMPLATES = {"walls.{}", "tflow.{}", "forces.{}",
+                      "flowfield.{}", "boundary_layer.{}", "tdat.{}"}
 
     # Initialise output dictionary to use in case of an infeasible design.
     # This equals the outputs of the UDC class when no results are produced,
@@ -126,8 +111,6 @@ class OptimisationProblem(ElementwiseProblem):
 
     _DESIGN_VARS = DesignVector.construct_vector(config)
 
-    _base_oper = copy.deepcopy(config.multi_oper[0])
-
 
     def __init__(self,
                  verbose: bool = False,
@@ -151,12 +134,12 @@ class OptimisationProblem(ElementwiseProblem):
         self.verbose = verbose
 
         # Calculate the number of objectives and constraints of the
-        # optimisation problem
+        # optimisation problem. Correctly accounts for the number of
+        # operating points and the number of constraints per point.
         n_objectives = config.n_objectives
-        n_inequality_constraints = len(config.constraint_IDs[0]) * \
-            len(config.multi_oper)
-        n_equality_constraints = len(config.constraint_IDs[1]) * \
-            len(config.multi_oper)
+        n_inequality_constraints = len(config.constraint_IDs[0]) * len(config.multi_oper) \
+               - sum(1 for con in config.constraint_IDs[0] if con == 3) * (len(config.multi_oper) - 1)
+        n_equality_constraints = len(config.constraint_IDs[1]) * len(config.multi_oper)
 
         # Initialise the parent class
         super().__init__(vars=self._DESIGN_VARS,
@@ -172,17 +155,6 @@ class OptimisationProblem(ElementwiseProblem):
         # Validate critical submodels_path exist
         if not self.submodels_path.exists():
             raise SystemError(f"Missing submodels path: {self.submodels_path}")
-
-        # Create folder path to store statefiles
-        if config.ARCHIVE_STATEFILES:
-            self.dump_folder = self.submodels_path / \
-                "Evaluated_tdat_state_files"
-            # Check existance of dump folder
-            try:
-                self.dump_folder.mkdir(exist_ok=True)
-            except PermissionError as e:
-                raise PermissionError(f"Error creating dump folder \
-                                      {self.dump_folder}") from e
 
         # Define analysisname template
         self.timestamp_format = "%m%d%H%M%S"
@@ -201,6 +173,9 @@ class OptimisationProblem(ElementwiseProblem):
             self._fileHandlingMTSET = fileHandlingMTSET
             self._fileHandlingMTFLO = fileHandlingMTFLO
             self._lazy_modules_loaded = True
+
+        # Load operating conditions
+        self.multi_oper = copy.deepcopy(config.multi_oper)
 
 
     def SetAnalysisName(self) -> None:
@@ -237,6 +212,15 @@ class OptimisationProblem(ElementwiseProblem):
                                                                 process_id,
                                                                 unique_id)
 
+        # Additionally set the tflow file path, as this is required to enable
+        # multipoint handling.
+        self._tflow_file_path = self.submodels_path / f"tflow.{self.analysis_name}"
+
+        # Invalidate the cached omega-line indices for the new file for
+        # multipoint handling.
+        if hasattr(self, "_omega_line_ids"):
+            del self._omega_line_ids
+
 
     def ComputeReynolds(self) -> None:
         """
@@ -259,42 +243,87 @@ class OptimisationProblem(ElementwiseProblem):
         self.oper["Inlet_Reynolds"] = float(inlet_re)
 
 
-    def ComputeOmega(self) -> None:
+    def ComputeOmega(self,
+                     idx: int) -> None:
         """
-        A simple function to compute the non-dimensional UDC rotational rate,
-        and write it to the blading parameters.
+        A simple function to compute the non-dimensional UDC rotational rate
+        Omega, and write it to the blading parameters.
 
         Parameters
         ----------
-        None
+        - idx : int
+            The index of the operating condition in the multi_oper dictionary.
+            This is used to extract the correct RPS from the blading dictionary.
 
         Returns
         -------
         None
         """
+
+        # Validate index
+        if idx >= len(self.blade_blading_parameters[0]["RPS_lst"]):
+            raise IndexError(f"Wrong number of operating RPS values")
 
         # Pre-calculate the common factor to avoid repeated computation
         omega_factor = (-2 * np.pi * self.Lref) / self.oper["Vinl"]
 
-        # Process each stage in a single loop
+        # Loop over all stages, and write the correct rotational rate for
+        # the current stage, taking into account the operating condition index.
         for blading_params in self.blade_blading_parameters:
-            # For a single point analysis, we need to extract/flatten the
-            # RPS_list into RPS, which is equivalent to taking the first entry
-            # from the list.
-            rps = blading_params["RPS_lst"][0]
+            rps = blading_params["RPS_lst"][idx]
             blading_params["RPS"] = rps
             blading_params["rotational_rate"] = float(rps * omega_factor)
 
 
+    def SetOmega(self,
+                 oper_idx) -> None:
+        """
+        A simple function to correctly set the rotational rate Omega in the
+        tflow.analysis_name file. This can be used in a multi-point fixed pitch
+        analysis to update the tflow file for each analysis rather than
+        regenerating the full tflow file, which is slower.
+
+        Parameters
+        ----------
+        - oper_idx : int
+            The index of the operating condition in the multi_oper dictionary.
+            This is used to extract the correct RPS from the blading dictionary.
+
+        Returns
+        -------
+        None
+        """
+
+        # Compute / update the rotational rates in the blading dictionaries
+        self.ComputeOmega(idx=oper_idx)
+
+        with open(self._tflow_file_path, "r+") as file:
+            lines = file.readlines()
+
+            # Cache the omega line indices if not already computed.
+            if not hasattr(self, "_omega_line_ids"):
+                # We assume that the line directly after the one starting with
+                # "OMEGA" is the one to update.
+                self._omega_line_ids = [i for i, line in enumerate(lines) if line.lstrip().startswith("OMEGA")]
+
+            # Use a local alias to avoid repeated attribute lookups in the loop.
+            blade_params = self.blade_blading_parameters
+
+            # Update the omega lines with the correct rotational rates.
+            for i, line_idx in enumerate(self._omega_line_ids):
+                rate = blade_params[i]["rotational_rate"]
+                lines[line_idx + 1] = f"{rate}\n"
+
+            # Write the updated lines back to the file.
+            file.seek(0)
+            file.writelines(lines)
+            file.truncate()  # Ensure no trailing bytes remain.
+
+
     def CleanUpFiles(self) -> None:
         """
-        Archive the UDC statefile to a separate folder and clean up files.
-
-        This method:
-        1. Moves the tdat statefile to a persistent archive folder, if desired.
-        2. Removes all temporary UDC input/output files.
-
-        The output files can always be regenerated from the statefile.
+        Remove all temporary UDC input/output files.
+        The i/o files can always be regenerated from the design vector.
 
         Parameters
         ----------
@@ -305,43 +334,27 @@ class OptimisationProblem(ElementwiseProblem):
         None
         """
 
-        # Construct filepaths once to reduce string operations
-        file_paths = {
-            file_type: self.submodels_path / template.format(self.analysis_name)
-            for file_type, template in self.FILE_TEMPLATES.items()
-        }
-
-        for file_type, file_path in file_paths.items():
-            # Move the state file to the dump folder
-            if file_type == "tdat" and config.ARCHIVE_STATEFILES:
-                if file_path.exists():
-                    copied_file = self.dump_folder / file_path.name
-                    with contextlib.suppress(FileNotFoundError):
-                        # Atomic operation (on same file system only) to improve
-                        # edge case handling. Prevents corruption during
-                        # concurrent access.
-                        file_path.replace(copied_file)
-            else:
-                # Cleanup all temporary files
-                if file_path.exists():
-                    file_path.unlink(missing_ok=True)
+        for file in self.FILE_TEMPLATES:
+            file_path = self.submodels_path / file.format(self.analysis_name)
+            if file_path.exists():
+                file_path.unlink(missing_ok=True)
 
 
     def GenerateUDCInputs(self,
-                          x: dict[str, float | int]) -> bool:
+                             x: dict[str, int | float]) -> bool:
         """
         Generates the input files required for the UDC simulation.
         It generates two input files:
         - walls.analysis_name: The MTSET input file.
         - tflow.analysis_name: The MTFLO blading input file.
 
-        Includes validation of the design vector is performed, since an
+        Includes validation of the design vector, since an
         infeasible design vector will raise a ValueError (somewhere) in the
         input generation method.
 
         Parameters
         ----------
-        - x : dict[str, any]
+        - x : dict[str, int | float]
             The pymoo design vector dictionary.
 
         Returns
@@ -360,8 +373,8 @@ class OptimisationProblem(ElementwiseProblem):
             self.blade_blading_parameters,
             self.Lref) = self.dvec_interface.DeconstructDesignVector(x_dict=x)
 
-            # Set the non-dimensional omega rates
-            self.ComputeOmega()
+            # Set the initial non-dimensional omega rates
+            self.oper = copy.deepcopy(self.multi_oper[0])
 
             # Generate the MTSET input file
             self._fileHandlingMTSET(params_CB=self.centerbody_variables,
@@ -369,14 +382,8 @@ class OptimisationProblem(ElementwiseProblem):
                                     analysis_name=self.analysis_name,
                                     ref_length=self.Lref).GenerateMTSETInput()
 
-            # Generate the MTFLO input file
-            self._fileHandlingMTFLO(analysis_name=self.analysis_name,
-                                    ref_length=self.Lref).GenerateMTFLOInput(blading_params=self.blade_blading_parameters,
-                                                                             design_params=self.blade_design_parameters,
-                                                                             plot=False)
-
-            # If both input generation routines succeeded, set output_generated
-            output_generated = True
+            # Generate the MTFLO input file and capture the success flag
+            output_generated = self.ComputeMTFLOInputs(oper_idx=0)
 
         except ValueError as e:
             # Any value error will be caused by interpolation issues, so
@@ -406,20 +413,95 @@ class OptimisationProblem(ElementwiseProblem):
         return output_generated
 
 
+    def ComputeMTFLOInputs(self,
+                           oper_idx: int) -> bool:
+        """
+        Compute the correct MTFLO input file based on the operating condition,
+        accounting for the possibility of variable pitch for
+        multipoint analyses.
+
+        Parameters
+        ----------
+        - oper_idx : int
+            Integer of the operating point index.
+
+        Returns
+        -------
+        - input_generated : bool
+            - Bool to indicate if the MTFLO input generation was successful.
+        """
+
+        # Detect global fixed-pitch multi-point:
+        all_fixed_pitch = all(len(blading_params["ref_blade_angle_lst"]) == 1
+                              for blading_params in self.blade_blading_parameters
+                              )
+
+        # For globally fixed-pitch analyses beyond the first operating point,
+        # only update Omega in-place to avoid regenerating tflow.
+        if all_fixed_pitch and oper_idx !=0:
+            self.SetOmega(oper_idx)
+            return True
+
+        # Otherwise, set the correct pitch angle per stage (variable or fixed)
+        for blading_params in self.blade_blading_parameters:
+            if len(blading_params["ref_blade_angle_lst"]) == len(self.multi_oper):
+                # Variable pitch - select angle for this operating condition
+                blading_params["ref_blade_angle"] = blading_params["ref_blade_angle_lst"][oper_idx]
+            # For fixed pitch stages we keep the single-angle as-is.
+
+        # Overwrite the UDC input file to the correct inputs
+        # First set the correct nondimensional rotational rate
+        self.ComputeOmega(oper_idx)
+
+        try:
+            # Generate the MTFLO input file
+            self._fileHandlingMTFLO(analysis_name=self.analysis_name,
+                                    ref_length=self.Lref).GenerateMTFLOInput(blading_params=self.blade_blading_parameters,
+                                                                             design_params=self.blade_design_parameters,
+                                                                             plot=False)
+            input_generated = True
+
+        except ValueError as e:
+            # Any value error will be caused by interpolation issues, so
+            # this is an efficient and simple method to check feasibility.
+            input_generated = False
+            if self.verbose:
+                error_code = "INVALID_DESIGN"
+                print(f"[{error_code}] Invalid design vector encountered: {e}")
+        except Exception as e:
+            # If any unexpected errors occur, log them as well
+            input_generated = False
+            if self.verbose:
+                # Use traceback for more specific error information.
+                import traceback
+                error_code = f"UNEXPECTED_{type(e).__name__}"
+                print(f"[{error_code}] Traceback:\n{traceback.format_exc()}")
+        if not input_generated:
+            # Set parameters equal to the config values in case of a crash
+            # for downstream handling.
+            self.Lref = config.BLADE_DIAMETERS[0]
+            self.duct_variables = copy.copy(config.DUCT_VALUES)
+            self.centerbody_variables = copy.copy(config.CENTERBODY_VALUES)
+            self.blade_blading_parameters = copy.copy(config.STAGE_BLADING_PARAMETERS)
+            self.blade_design_parameters = copy.copy(config.STAGE_DESIGN_VARIABLES)
+
+        return input_generated
+
+
     def _evaluate(self,
                   x: dict[str, float | int],
                   out: dict[str, np.typing.NDArray[np.floating]],
                   *args,
                   **kwargs) -> None:
         """
-        Element-wise evaluation function for a single-point optimisation
+        Element-wise evaluation function for the optimisation
         problem.
 
         Parameters
         ----------
-        - x : dict[str, float | int]
+        - x : dict
             The pymoo design vector dictionary.
-        - out : dict[str, np.typing.NDArray[np.floating]]
+        - out : dict
             The pymoo elementwise evaluation output dictionary.
         - *args : tuple
             Additional arguments.
@@ -435,62 +517,83 @@ class OptimisationProblem(ElementwiseProblem):
         # Generate a unique analysis name
         self.SetAnalysisName()
 
-        # Copy the operational conditions
-        self.oper = copy.deepcopy(self._base_oper)
-
         # Generate the UDC input files.
         # If design_okay is false, this indicates an error in the input file
         # generation caused by an infeasible design vector.
         design_okay = self.GenerateUDCInputs(x)
 
-        # Evaluate the design using the UDC if the design is feasible
+        # Only perform the UDC analyses if the input generation has succeeded.
+        # Initialise the UDC output list of dictionaries. Use the crash outputs
+        # in initialisation to pre-populate them in case of a crash or
+        # infeasible design vector
+        UDC_outputs = [copy.deepcopy(self.CRASH_OUTPUTS) for _ in range(len(self.multi_oper))]
+
         if design_okay:
-            self.ComputeReynolds()  # Compute the Reynolds number
+            valid_grid = False
+            for idx, operating_point in enumerate(self.multi_oper):
+                # Compute the necessary inputs
+                self.oper = copy.deepcopy(operating_point)
+                self.ComputeReynolds()
 
-            UDC_interface = self._UDC(operating_conditions=self.oper,
-                                      ref_length=self.Lref,
-                                      analysis_name=self.analysis_name,
-                                      run_viscous=True,
-                                      **kwargs)
+                if idx != 0:
+                    # Only update tflow file for the second-onward point,
+                    # since the initial point is written when first generating
+                    # the input files
+                    design_okay = self.ComputeMTFLOInputs(oper_idx=idx)
 
-            try:
-                # Run UDC
-                (exit_flag,
-                UDC_outputs) = UDC_interface.caller(external_inputs=True,
-                                                    output_type=OutputType.FORCES_ONLY)
+                # Create a UDC interface
+                UDC_interface = self._UDC(operating_conditions=self.oper,
+                                          ref_length=self.Lref,
+                                          analysis_name=self.analysis_name,
+                                          run_viscous=True,
+                                          **kwargs)
+                if design_okay:
+                    # Duplicate check required for a multi-point analysis
+                    try:
+                        # Run UDC
+                        (exit_flag,
+                         UDC_outputs[idx]) = UDC_interface.caller(external_inputs=True,
+                                                                  output_type=OutputType.FORCES_ONLY,
+                                                                  grid_checked=valid_grid)
 
-                # Overwrite outputs in case of crashes
-                if exit_flag in (ExitFlag.CRASH, ExitFlag.CHOKING,
-                                 ExitFlag.NOT_PERFORMED):
-                    UDC_outputs = copy.copy(self.CRASH_OUTPUTS)
+                        # Overwrite outputs in case of crashes
+                        if exit_flag in (ExitFlag.CRASH, ExitFlag.CHOKING,
+                                         ExitFlag.NOT_PERFORMED):
+                            UDC_outputs[idx] = copy.copy(self.CRASH_OUTPUTS)
 
-            except Exception as e:
-                UDC_outputs = copy.copy(self.CRASH_OUTPUTS)
-                if self.verbose:
-                    print(f"[UDC_ERROR] case={self.analysis_name}: {e}")
+                    except Exception as e:
+                        exit_flag = ExitFlag.CRASH
+                        UDC_outputs[idx] = copy.copy(self.CRASH_OUTPUTS)
+                        if self.verbose:
+                            print(f"[UDC_ERROR] OP={idx}, case={self.analysis_name}: {e}")
 
-        else:
-            # If the design is infeasible, we load the crash outputs
-            # This is a predefined dictionary with all outputs set to 0.
-            UDC_outputs = copy.copy(self.CRASH_OUTPUTS)
+                    # Set valid_grid to true to skip the grid checking routines
+                    # for the next operating point if the solver exited with a
+                    # converged/non-converged solution.
+                    if exit_flag in (ExitFlag.SUCCESS, ExitFlag.NON_CONVERGENCE, ExitFlag.CHOKING):
+                        valid_grid = True
+                else:
+                    # If any of the operating points are infeasible,
+                    #  set crash outputs.
+                    UDC_outputs[idx] = copy.copy(self.CRASH_OUTPUTS)
 
         # Obtain objective(s)
         # The out dictionary is updated in-place
         Objectives(duct_variables=self.duct_variables,
-                   oper=self.oper,
-                   Lref=self.Lref).ComputeObjective(analysis_outputs=UDC_outputs,
-                                                    objective_IDs=config.objective_IDs,
-                                                    out=out)
+                   oper=self.multi_oper,
+                   Lref=self.Lref).ComputeMultiPointObjectives(analysis_outputs=UDC_outputs,
+                                                               objective_IDs=config.objective_IDs,
+                                                               out=out)
 
         # Compute constraints
         # The out dictionary is updated in-place
         Constraints(self.centerbody_variables,
                     self.duct_variables,
                     self.blade_blading_parameters,
-                    design_okay).ComputeConstraints(analysis_outputs=UDC_outputs,
-                                                    Lref=self.Lref,
-                                                    oper=self.oper,
-                                                    out=out)
+                    design_okay).ComputeMultiPointConstraints(analysis_outputs=UDC_outputs,
+                                                              Lref=self.Lref,
+                                                              oper=self.multi_oper,
+                                                              out=out)
 
         # Cleanup the generated files
         with contextlib.suppress(Exception):
@@ -514,11 +617,11 @@ if __name__ == "__main__":
     ref_vectors = ref_pop.get("X")
     ref_vectors = RepairIndividuals()._do(test, ref_vectors)
     ref_vector = ref_vectors[0]  # Use the first vector for testing
-    print("generation of reference vector took:", time.monotonic() - start_time, "seconds")
+    print("generation of reference vector took: ", time.monotonic() - start_time, " seconds")
 
     # Create an output dictionary to store the results
     output = {}
     start_time = time.monotonic()
     test._evaluate(ref_vector, output)
     print(output)
-    print("evaluation took:", time.monotonic() - start_time, "seconds")
+    print("evaluation took:", time.monotonic() - start_time, " seconds")
