@@ -160,6 +160,7 @@ class Constraints:
         - Thrust : float
             A float of the thrust in Newtons
         """
+        print(self.oper)
         return analysis_outputs["data"]["Total force CT"] * \
             (0.5 * self.oper["atmos"].density[0] * self.oper["Vinl"] ** 2 * \
              Lref ** 2)
@@ -632,46 +633,30 @@ class Constraints:
 
 
 if __name__ == "__main__":
-    # Test execution of constraints using a test-case forces output.
-    # Add the parent and submodels paths to the system path
-    import sys
-    from pathlib import Path
-    # Add the parent and submodels paths to the system path if they are not
-    # already in the path
-    parent_path = str(Path(__file__).resolve().parent.parent)
-    submodels_path = str(Path(__file__).resolve().parent.parent / "Submodels")
-
-    if parent_path not in sys.path:
-        sys.path.append(parent_path)
-
-    if submodels_path not in sys.path:
-        sys.path.append(submodels_path)
-
-    # Import MTFLOW interface submodels and other dependencies
+    # Test execution of constraints using a blank forces output.
+    from utils import load_json_data, ensure_repo_paths #type: ignore
     from Submodels.output_handling import output_processing #type: ignore
 
-    # Extract outputs from the forces output file
+    # Set up paths correctly
+    ensure_repo_paths()
+
+    # Extract blank forces output data
     outputs = output_processing().GetAllVariables()
 
+    # Load geometry
+    geometry = load_json_data("geometry.json")
+    baseline_design = load_json_data("baseline_design.json")
+
     # Create an instance of the Constraints class
-    test = Constraints(config.CENTERBODY_VALUES,
-                       config.DUCT_VALUES,
-                       config.STAGE_BLADING_PARAMETERS,
+    test = Constraints(baseline_design["CENTERBODY_VALUES"],
+                       baseline_design["DUCT_VALUES"],
+                       baseline_design["blading_parameters"],
                        design_okay=True)
 
-    # Compute the constraints - single point constraint analysis
+    # Compute the constraints
     output = {}
-    test.ComputeConstraints(outputs,
-                            Lref=config.BLADE_DIAMETERS[0],
-                            oper=config.multi_oper[0],
-                            out=output)
-
-    print(output)
-
-    # Compute the constraints - multi-point constraint analysis
-    output = {}
-    test.ComputeMultiPointConstraints([outputs, outputs],
-                                      Lref=config.BLADE_DIAMETERS[0],
+    test.ComputeMultiPointConstraints([outputs],
+                                      Lref=geometry["REFERENCE_STAGE_DIAMETERS"][0],
                                       oper=config.multi_oper,
                                       out=output)
 

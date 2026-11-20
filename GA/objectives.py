@@ -45,7 +45,8 @@ Changelog:
         Improved efficiency of frontal area objective
 - V3.0: Renamed MTFLOW to UDC for consistency with written thesis.
 - V3.1: Removed unneccesary rounding.
-- V3.2: Updated module to use new .json based configuration.
+- V3.2: Updated module to use new .json based configuration. Cleaned up example 
+        usage
 """
 
 # Import standard libraries
@@ -387,22 +388,18 @@ class Objectives:
 
 if __name__ == "__main__":
     # Run a test of the objectives class
-    import config
-
-    # Add the parent folder path to the system path
-    import sys
-    from pathlib import Path
-    parent_dir = Path(__file__).resolve().parent.parent
-    submodels_path = parent_dir / "Submodels"
-    sys.path.extend([str(parent_dir), str(submodels_path)])
-
+    import config #type: ignore
+    from utils import ensure_repo_paths #type: ignore
     from Submodels.output_handling import output_processing #type: ignore
+    
+    # Add the parent folder path to the system path
+    ensure_repo_paths()
 
     objectives_class = Objectives(config.DUCT_VALUES,
                                   config.multi_oper,
                                   config.BLADE_DIAMETERS[0])
     output = {}
-    objectives_class.ComputeObjective(output_processing('x22a_validation').GetAllVariables(),
+    objectives_class.ComputeObjective(output_processing().GetAllVariables(),
                                       config.objective_IDs,
                                       output)
     print(output)
