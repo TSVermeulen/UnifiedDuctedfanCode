@@ -651,7 +651,7 @@ if __name__ == "__main__":
     from Submodels.output_handling import output_processing #type: ignore
 
     # Extract outputs from the forces output file
-    outputs = output_processing(analysis_name='test_case').GetAllVariables()
+    outputs = output_processing().GetAllVariables()
 
     # Create an instance of the Constraints class
     test = Constraints(config.CENTERBODY_VALUES,
