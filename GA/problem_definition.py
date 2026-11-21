@@ -109,7 +109,7 @@ class OptimisationProblem(ElementwiseProblem):
                      'CTp': 0.00000,
                      'Xtr': 0.00000}}}
 
-    _DESIGN_VARS = DesignVector.construct_vector(config)
+    _DESIGN_VARS = DesignVector.construct_vector()
 
 
     def __init__(self,
@@ -432,7 +432,7 @@ class OptimisationProblem(ElementwiseProblem):
         """
 
         # Detect global fixed-pitch multi-point:
-        all_fixed_pitch = all(len(blading_params["ref_blade_angle_lst"]) == 1
+        all_fixed_pitch = all(len(blading_params["ref_blade_angles"]) == 1
                               for blading_params in self.blade_blading_parameters
                               )
 
@@ -444,9 +444,9 @@ class OptimisationProblem(ElementwiseProblem):
 
         # Otherwise, set the correct pitch angle per stage (variable or fixed)
         for blading_params in self.blade_blading_parameters:
-            if len(blading_params["ref_blade_angle_lst"]) == len(self.multi_oper):
+            if len(blading_params["ref_blade_angles"]) == len(self.multi_oper):
                 # Variable pitch - select angle for this operating condition
-                blading_params["ref_blade_angle"] = blading_params["ref_blade_angle_lst"][oper_idx]
+                blading_params["ref_blade_angle"] = blading_params["ref_blade_angles"][oper_idx]
             # For fixed pitch stages we keep the single-angle as-is.
 
         # Overwrite the UDC input file to the correct inputs
@@ -605,7 +605,7 @@ if __name__ == "__main__":
     Test Block
     """
 
-    test = OptimisationProblem()
+    test = OptimisationProblem(verbose=True)
 
     # Create a reference vector for testing
     from init_population import InitPopulation  # type: ignore

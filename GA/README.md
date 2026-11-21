@@ -1,6 +1,6 @@
 # Genetic Algorithm modules of the Unified Ducted fan Code (UDC)
 
-This folder contains the relevant modules for the Genetic Algorithm (GA) implementation of the UDC. These modules and their interconnections are visualised in the diagram below. To execute an optimisation, the configuration needs to be set in config.py. This file defines the operating conditions, initial reference geometry, constraints, objectives, and setup of the algorithm itself (population size, termination controls, etc.). Three different options are provided to execute the genetic algorithm optimisation, being:
+This folder contains the relevant modules for the Genetic Algorithm (GA) implementation of the UDC. These modules and their interconnections are visualised in the diagram below. To execute an optimisation, the configuration needs to be set in config.py and the config .json files. This file defines the operating conditions, initial reference geometry, constraints, objectives, and setup of the algorithm itself (population size, termination controls, etc.). Three different options are provided to execute the genetic algorithm optimisation, being:
 
 - main.py: A U-NSGA-III implementation using serialised evaluation.
 - main-parallelised.py: A basic μ+λ GA implementation using parallelised evaluation.
@@ -16,6 +16,15 @@ This folder contains the relevant modules for the Genetic Algorithm (GA) impleme
 ├── __init__.py
 ├── checkpoint.py
 ├── config.py
+├── config
+│   ├── baseline_design.json
+│   ├── geometry.json
+│   ├── operating_conditions.json
+│   ├── operating_conditions_climb.json
+│   ├── operating_conditions_combat.json
+│   ├── operating_conditions_endurance.json
+│   ├── operating_conditions_endurance_mission.json
+│   └── optimisation.json
 ├── constraints.py
 ├── design_vector_interface.py
 ├── init_designvector.py

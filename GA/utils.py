@@ -2,24 +2,35 @@
 utils
 =====
 
-Simple utility script to ensure the paths are correctly set up and
-compute the required number of points for the appropriate reference directions count
+Utility functions used throughout the Genetic Algorithm (GA) workflow(s). 
+Includes function to ensure the paths are correctly set up, a function to 
+compute the required number of points for the appropriate reference directions, 
+and a function to load JSON data. Additionally includes a figsize formatting 
+function for matplotlib figures in the postprocessing module. 
 
 Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 1.1
+Version: 1.2
 
 Changelog:
 - V1.0: Initial implementation.
-- V1.1: Implemented reference direction point counter to ensure correct number of reference directions are used in the optimisation.
-        Updated documentation and switched from sys.path.append to sys.path.insert(0, path) to ensure local code wins over any global packages.
+- V1.1: Implemented reference direction point counter to ensure correct number 
+        of reference directions are used in the optimisation.
+        Updated documentation and switched from sys.path.append to 
+        sys.path.insert(0, path) to ensure local code wins over any global 
+        packages.
+- V1.2: Added load_json_file function to load configuration data from a JSON 
+        file. Updated documentation and added type hints for better code 
+        clarity.
 """
 
 # Import standard libraries
 import sys
 import math
+import json
+from typing import Any, Dict
 from pathlib import Path
 
 
@@ -55,6 +66,9 @@ def calculate_n_reference_points(cfg: object) -> int:
         The number of points needed
     """
 
+    # Load data from JSON files
+    optimisation_data = load_json_data("optimisation.json")
+
     try:
         m = cfg.n_objectives
     except AttributeError as e:
@@ -65,7 +79,7 @@ def calculate_n_reference_points(cfg: object) -> int:
         return m
 
     max_iter = 10000  # hard-stop for safety; tweak if needed
-    population_size = cfg.POPULATION_SIZE
+    population_size = optimisation_data["POPULATION_SIZE"]
     best_diff = float('inf')
     best_p = 1
 
@@ -98,6 +112,25 @@ def get_figsize(columnwidth=448.1309, wf=0.5, hf=(5.**0.5-1.0)/2.0, ):
     fig_width = fig_width_pt*inches_per_pt  # width in inches
     fig_height = fig_width*hf      # height in inches
     return [fig_width, fig_height]
+
+
+def load_json_data(filename: str) -> Dict[str, Any]:
+    """
+    Load data from a JSON file.
+
+    Args:
+        filename (str): The name of the JSON file containing the
+        data.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the data.
+    """
+
+    path = Path(__file__).parent / "config" / filename
+    with open(path, 'r') as file:
+        data = json.load(file)
+
+    return data
 
 
 if __name__ == "__main__":

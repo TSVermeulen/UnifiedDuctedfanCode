@@ -4,8 +4,8 @@ main-parallelised
 
 Description
 -----------
-This module defines the main entry point for running a multi-threaded 
-optimisation problem using the pymoo framework with a joblib parallelisation 
+This module defines the main entry point for running a multi-threaded
+optimisation problem using the pymoo framework with a joblib parallelisation
 technique.
 
 Functionality
@@ -32,15 +32,16 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 2.0
+Version: 2.1
 
 Changelog:
 - V1.0: Initial implementation.
 - V1.1: Updated documentation to reflect changes in the main module structure and added examples for usage.
 - V1.2: Updated to include reserved thread for MTSOL output reader.
 - V1.3: Updated to use the utils.ensure_repo_paths function.
-- V2.0: Updated to pymoo 0.6.2 and switched to joblib parallelisation. 
+- V2.0: Updated to pymoo 0.6.2 and switched to joblib parallelisation.
         Added checkpointing.
+- V2.1: Updated to use new .json-based configuration.
 """
 
 # Import standard libraries
@@ -57,7 +58,7 @@ from utils import ensure_repo_paths #type: ignore
 ensure_repo_paths()
 
 # Import interface submodels and other dependencies
-import config #type: ignore
+from utils import load_json_data #type: ignore
 from problem_definition import OptimisationProblem #type: ignore
 from init_population import InitPopulation #type: ignore
 from termination_conditions import GetTerminationConditions #type: ignore
@@ -66,8 +67,11 @@ from checkpoint import CheckpointCallBack # type: ignore
 from parallelisation import JoblibParallelisation # type: ignore
 
 if __name__ == "__main__":
+    # Load configuration
+    opt_cfg = load_json_data("optimisation.json")
+
     """ Initialise the joblib runner """
-    if config.RESERVE_THREAD:
+    if opt_cfg["RESERVE_THREAD"]:
         n_jobs = -2  # Leave one core free
     else:
         n_jobs = -1  # Use all available cores
@@ -81,20 +85,20 @@ if __name__ == "__main__":
     # Initialise the optimisation problem by passing the configuration and
     # the runner
     problem = OptimisationProblem(elementwise_runner=runner,
-                                  seed=config.GLOBAL_SEED)
+                                  seed=opt_cfg["GLOBAL_SEED"])
 
     # Initialise the algorithm
-    algorithm = MixedVariableGA(pop_size=config.POPULATION_SIZE,
+    algorithm = MixedVariableGA(pop_size=opt_cfg["POPULATION_SIZE"],
                                 mating=MixedVariableMating(repair=RepairIndividuals()),
-                                sampling=InitPopulation(seed=config.GLOBAL_SEED).GeneratePopulation(),
+                                sampling=InitPopulation(seed=opt_cfg["GLOBAL_SEED"]).GeneratePopulation(),
                                 repair=RepairIndividuals())
 
     # Run the optimisation
     res = minimize(problem,
                    algorithm,
                    termination=GetTerminationConditions(),
-                   callback=CheckpointCallBack(interval=config.CHECKPOINT_INTERVAL),
-                   seed=config.GLOBAL_SEED,
+                   callback=CheckpointCallBack(interval=opt_cfg["CHECKPOINT_INTERVAL"]),
+                   seed=opt_cfg["GLOBAL_SEED"],
                    verbose=True,
                    save_history=True,
                    return_least_infeasible=True)
@@ -113,7 +117,7 @@ if __name__ == "__main__":
 
     now = datetime.datetime.now()
     timestamp = f"{now:%y%m%d%H%M%S%f}"
-    output_name = results_dir / f"res_pop{config.POPULATION_SIZE}_eval{config.MAX_GENERATIONS}_{timestamp}.dill"
+    output_name = results_dir / f"res_pop{opt_cfg["POPULATION_SIZE"]}_eval{opt_cfg["MAX_GENERATIONS"]}_{timestamp}.dill"
     try:
         with open(output_name, 'wb') as f:
             dill.dump(res, f)

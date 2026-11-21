@@ -50,8 +50,8 @@ Changelog:
 - V2.1:     Expanded objective space plotting capabilities to enable cumulative
             objective space plotting from multiple analyses. Updated formatting.
 - V2.2:     Updated formatting to work for double-column layouts.
-- V2.2.1:   Removed fname as class attribute and instead added it as an argument 
-            to the main method. Made plots interactive to stop code from waiting 
+- V2.2.1:   Removed fname as class attribute and instead added it as an argument
+            to the main method. Made plots interactive to stop code from waiting
             until plots are closed.
 """
 
@@ -568,7 +568,7 @@ class PostProcessing:
 
         keys = [
             "root_LE_coordinate",
-            "ref_blade_angle",
+            "ref_blade_angles",
             "blade_count",
             "RPS_lst",
             "radial_stations"
@@ -653,7 +653,7 @@ class PostProcessing:
         fig, ax = plt.subplots(nrows=2, ncols=2,
                                constrained_layout=True,
                                figsize=get_figsize(wf=1,
-                                                   hf=0.7,         
+                                                   hf=0.7,
                                                    columnwidth=COLUMN_WIDTH))
 
         # Set cyclers and grids
@@ -1573,7 +1573,8 @@ class PostProcessing:
                     # The blade pitch is defined with respect to the blade
                     # pitch angle at the reference radial station, and thus is
                     # corrected accordingly.
-                    blade_pitch = blading[i]["blade_angle"][idx] + blading[i]["ref_blade_angle"] - blading[i]["reference_section_blade_angle"]
+                    blade_pitch = (blading[i]["blade_angle"][idx] +
+                                   blading[i]["ref_blade_angles"][0])
                     (rotated_upper_x,
                      rotated_upper_y,
                      rotated_lower_x,
@@ -1642,7 +1643,8 @@ class PostProcessing:
                     # The blade pitch is defined with respect to the blade pitch
                     # angle at the reference radial station, and thus is
                     # corrected accordingly.
-                    blade_pitch = (blading[i]["blade_angle"][idx] + blading[i]["ref_blade_angle"] - blading[i]["reference_section_blade_angle"])
+                    blade_pitch = (blading[i]["blade_angle"][idx] +
+                                   blading[i]["ref_blade_angles"][0])
                     (rotated_upper_x,
                      rotated_upper_y,
                      rotated_lower_x,
@@ -1831,10 +1833,10 @@ class PostProcessing:
             DUCT_upper_y *= duct_data[j]["Chord Length"]
             DUCT_lower_x *= duct_data[j]["Chord Length"]
             DUCT_lower_y *= duct_data[j]["Chord Length"]
-            DUCT_upper_x += duct_data[j]["Leading Edge Coordinates"][0]
-            DUCT_lower_x += duct_data[j]["Leading Edge Coordinates"][0]
-            DUCT_upper_y += duct_data[j]["Leading Edge Coordinates"][1]
-            DUCT_lower_y += duct_data[j]["Leading Edge Coordinates"][1]
+            DUCT_upper_x += duct_data[j]["Leading Edge X-Coordinate"]
+            DUCT_lower_x += duct_data[j]["Leading Edge X-Coordinate"]
+            DUCT_upper_y += duct_data[j]["Leading Edge Y-Coordinate"]
+            DUCT_lower_y += duct_data[j]["Leading Edge Y-Coordinate"]
 
             duct_x = np.concatenate((DUCT_upper_x,
                                      np.flip(DUCT_lower_x)),
@@ -1870,8 +1872,10 @@ class PostProcessing:
                     # Rotate the airfoil profile to the correct angle
                     # The blade pitch is defined with respect to the blade
                     # pitch angle at the reference radial station, and thus
-                    # is corrected accordingly.
-                    blade_pitch = (blading_data[j][k]["blade_angle"][idx] + blading_data[j][k]["ref_blade_angle"] - blading_data[j][k]["reference_section_blade_angle"])
+                    # is corrected accordingly. We use the tip angle
+                    # corresponding to the first operating condition here as
+                    # arbitrary selection.
+                    blade_pitch = (blading_data[j][k]["blade_angle"][idx] + blading_data[j][k]["ref_blade_angles"][0])
                     (rotated_upper_x,
                      _,
                      rotated_lower_x,
@@ -2506,10 +2510,10 @@ class PostProcessing:
         # Legend below figure
         handles, legend_labels = ax.get_legend_handles_labels()
         by_label = dict(zip(legend_labels, handles))
-        ax.legend(by_label.values(), 
-                  by_label.keys(), 
-                  bbox_to_anchor=(0.5, -0.3), 
-                  loc="upper center", 
+        ax.legend(by_label.values(),
+                  by_label.keys(),
+                  bbox_to_anchor=(0.5, -0.3),
+                  loc="upper center",
                   ncols=2)
 
         ax.minorticks_on()
@@ -2587,7 +2591,7 @@ class PostProcessing:
         None
         """
 
-        # Coerce fname to Path and resolve it if it's not already absolute        
+        # Coerce fname to Path and resolve it if it's not already absolute
         fname = Path(fname)
         self.results_path = fname if fname.is_absolute() else \
             (self.base_dir / fname).resolve()
@@ -2673,12 +2677,12 @@ class PostProcessing:
 
 
 if __name__ == "__main__":
-    # Below are sample applications of the PostProcessing class. 
+    # Below are sample applications of the PostProcessing class.
     # Make sure to adjust the filenames and labels appropriately.
-    # Note that the correct configuration file (config.py) must be used for the 
-    # results files which are post-processed, as the post-processing 
+    # Note that the correct configuration file (config.py) must be used for the
+    # results files which are post-processed, as the post-processing
     # relies on the configuration for correct data extraction and plotting.
-    
+
     # Initialize the post-processing class
     processing_class = PostProcessing()
 
@@ -2687,13 +2691,13 @@ if __name__ == "__main__":
     # processing_class.compare_multiple_runs(fnames=[Path("Results/res_pop200_eval500_251124182952404967.dill")],
     #                                        labels=["Optimized"])
 
-    # Single-point single-objective results for the endurance cruise condition. 
-    # print("Post-processing the single-point single-objective results for the endurance cruise condition...")
-    # processing_class.compare_multiple_runs(fnames=[Path("Results/res_pop200_eval500_251119042735540563.dill")],
-    #                                        labels=["Optimized"])
-    
-    # Note how the "normal" main method can also be used to generate more 
-    # in-depth results. compare_multiple_runs() does not analyse the 
+    # Single-point single-objective results for the endurance cruise condition.
+    print("Post-processing the single-point single-objective results for the endurance cruise condition...")
+    processing_class.compare_multiple_runs(fnames=[Path("Results/res_pop200_eval500_251119042735540563.dill")],
+                                           labels=["Optimized"])
+
+    # Note how the "normal" main method can also be used to generate more
+    # in-depth results. compare_multiple_runs() does not analyse the
     # performance/convergence of the analysis, which main() does.
     # print("Post-processing the single-point single-objective results for the endurance cruise condition with the main method...")
     # processing_class.main(fname=Path("Results/res_pop200_eval500_251119042735540563.dill"))
