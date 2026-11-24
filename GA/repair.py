@@ -25,8 +25,8 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Date [dd-mm-yyyy]: [14-11-2025]
-Version: 1.6
+Date [dd-mm-yyyy]: [17-11-2026]
+Version: 1.7
 
 Changelog:
 - V1.0: Initial implementation of repair operators for profile
@@ -43,6 +43,8 @@ Changelog:
 - V1.6: Updated parameterisation to use root chord + taper distribution instead
         of chord distribution as design variable. Removed now deprecated chord
         distribution repair function.
+- V1.7: Updated to use .json-based configuration files. Fixed bug in fix
+        blockage which did not account for variable pitch.
 """
 
 # Import standard libraries
@@ -58,7 +60,7 @@ from pymoo.operators.repair.to_bound import set_to_bounds_if_outside
 from utils import ensure_repo_paths #type: ignore
 ensure_repo_paths()
 
-import config #type: ignore
+from utils import load_json_data #type: ignore
 from Submodels.Parameterisations import AirfoilParameterisation #type: ignore
 from Submodels.file_handling import fileHandlingMTFLO #type: ignore
 from design_vector_interface import DesignVectorInterface #type: ignore
@@ -81,8 +83,9 @@ class RepairIndividuals(Repair):
         # Call the parent class constructor
         super().__init__()
 
-        # Define feasibility offset between consecutive control points
-        self.feasibility_offset = config.PROFILE_FEASIBILITY_OFFSET
+        # Load configuration .json data
+        self.opt_cfg = load_json_data("optimisation.json")
+        self.geom = load_json_data("geometry.json")
 
         # Initialize the airfoil parameterisation class
         self.airfoil_parameterisation = AirfoilParameterisation()
@@ -103,8 +106,14 @@ class RepairIndividuals(Repair):
 
 
     def _computebezier(self,
-                       profile_params: dict[str, float]) -> tuple[tuple[np.typing.NDArray[np.float64], np.typing.NDArray[np.float64], np.typing.NDArray[np.float64], np.typing.NDArray[np.float64]],
-                                                                  tuple[np.typing.NDArray[np.float64], np.typing.NDArray[np.float64], np.typing.NDArray[np.float64], np.typing.NDArray[np.float64]]]:
+                       profile_params: dict[str, float]) -> tuple[tuple[np.typing.NDArray[np.floating],
+                                                                        np.typing.NDArray[np.floating],
+                                                                        np.typing.NDArray[np.floating],
+                                                                        np.typing.NDArray[np.floating]],
+                                                                  tuple[np.typing.NDArray[np.floating],
+                                                                        np.typing.NDArray[np.floating],
+                                                                        np.typing.NDArray[np.floating],
+                                                                        np.typing.NDArray[np.floating]]]:
         """
         Compute the Bezier curves for the x-coordinates and y-coordinates of
         the leading and trailing edge thickness and camber distributions
@@ -253,7 +262,7 @@ class RepairIndividuals(Repair):
                 if (b_15 - x_t) / (1 - x_t) < \
                     3 * x_t + 15 * b_8 ** 2 / (4 * r_LE):
                     b_15_adjusted_coor = 3 * x_t + 15 * b_8 ** 2 / \
-                        (4 * r_LE) + self.feasibility_offset
+                        (4 * r_LE) + self.opt_cfg["PROFILE_FEASIBILITY_OFFSET"]
                     b_15_adjusted = x_t + (1 - x_t) * b_15_adjusted_coor
 
                     # Enfoce b_15 to bounds
@@ -286,7 +295,7 @@ class RepairIndividuals(Repair):
                 b_2 = modified_profile_params["b_2"]
 
                 if b_2 < b_0:
-                    b_2 = b_0 + self.feasibility_offset
+                    b_2 = b_0 + self.opt_cfg["PROFILE_FEASIBILITY_OFFSET"]
 
                     # Enforce b_2 to bounds
                     modified_profile_params["b_2"] = np.clip(b_2,
@@ -295,7 +304,7 @@ class RepairIndividuals(Repair):
 
                 b_2 = modified_profile_params["b_2"]
                 if b_2 > x_c:
-                    b_2 = x_c - self.feasibility_offset
+                    b_2 = x_c - self.opt_cfg["PROFILE_FEASIBILITY_OFFSET"]
 
                     # Enforce b_2 to bounds
                     modified_profile_params["b_2"] = np.clip(b_2,
@@ -312,7 +321,7 @@ class RepairIndividuals(Repair):
                     (-8 * y_c / np.tan(leading_edge_direction) + 13 * x_c) / 6:
                     b_17_adjusted_coor = (-8 * y_c / \
                                           np.tan(leading_edge_direction) + \
-                                            13 * x_c) / 6 + self.feasibility_offset
+                                            13 * x_c) / 6 + self.opt_cfg["PROFILE_FEASIBILITY_OFFSET"]
                     b_17_adjusted = (1 - x_c) * b_17_adjusted_coor + x_c
 
                     # Enforce b_17 to bounds
@@ -325,7 +334,7 @@ class RepairIndividuals(Repair):
                 if x_c > (3 * x_c - y_c / np.tan(leading_edge_direction))  / 2:
                     # based on the LE camber y coordinates
                     gamma_LE_adjusted_x_based = np.atan(y_c / \
-                                                        (x_c - 2 * self.feasibility_offset)) + 1e-3
+                                                        (x_c - 2 * self.opt_cfg["PROFILE_FEASIBILITY_OFFSET"])) + 1e-3
                     gamma_LE_adjusted_b0_based = np.atan(y_c / \
                                                          (modified_profile_params["b_0"] * x_c)) - 1e-3
 
@@ -449,10 +458,9 @@ class RepairIndividuals(Repair):
 
         # If the duct is positioned aft of the LE of the blade root,
         # move it forward
-        x_old, y_old = duct_params["Leading Edge Coordinates"]
+        x_old = duct_params["Leading Edge X-Coordinate"]
         if x_old > blading_params["root_LE_coordinate"]:
-            duct_params["Leading Edge Coordinates"] = (blading_params["root_LE_coordinate"],
-                                                       y_old)
+            duct_params["Leading Edge X-Coordinate"] = blading_params["root_LE_coordinate"]
 
         return duct_params
 
@@ -488,7 +496,17 @@ class RepairIndividuals(Repair):
             for i, design_param in enumerate(design_params):
 
                 if blading_params["radial_stations"][i] == 0:
+                    # Don't check at the centerline since we cannot define
+                    # blockage at r=0
                     continue
+
+                # Compute sectional profile
+                upper_x, upper_y, lower_x, lower_y = self.airfoil_parameterisation.ComputeProfileCoordinates(design_param)
+                upper_x *= blading_params["chord_length"][i]
+                upper_y *= blading_params["chord_length"][i]
+                lower_x *= blading_params["chord_length"][i]
+                lower_y *= blading_params["chord_length"][i]
+
                 # Loop to fix the blockage: decrement blade_count while > 2
                 # to enforce minimum of 2 blades
                 evaluating = True
@@ -499,48 +517,49 @@ class RepairIndividuals(Repair):
                         blading_params["radial_stations"][i] / \
                             blading_params["blade_count"]
 
-                    upper_x, upper_y, lower_x, lower_y = self.airfoil_parameterisation.ComputeProfileCoordinates(design_param)
-                    upper_x *= blading_params["chord_length"][i]
-                    upper_y *= blading_params["chord_length"][i]
-                    lower_x *= blading_params["chord_length"][i]
-                    lower_y *= blading_params["chord_length"][i]
+                    # Account for variable pitch
+                    max_circumf_thickness = 0  # Initialise to zero
+                    for tip_angle in blading_params["ref_blade_angles"]:
+                        # Compute local collective blade angle
+                        blade_pitch = (blading_params["blade_angle"][i] + tip_angle)
 
-                    blade_pitch = (blading_params["blade_angle"][i] + \
-                                   blading_params["ref_blade_angle"] - \
-                                    blading_params["reference_section_blade_angle"])
-                    (rotated_upper_x,
-                     rotated_upper_y,
-                     rotated_lower_x,
-                     rotated_lower_y)  = fileHandlingMTFLO.RotateProfile(blade_pitch,
-                                                                         upper_x,
-                                                                         lower_x,
-                                                                         upper_y,
-                                                                         lower_y)
+                        (rotated_upper_x,
+                        rotated_upper_y,
+                        rotated_lower_x,
+                        rotated_lower_y)  = fileHandlingMTFLO.RotateProfile(blade_pitch,
+                                                                            upper_x,
+                                                                            lower_x,
+                                                                            upper_y,
+                                                                            lower_y)
 
-                    LE_coordinate = blading_params["radial_stations"][i] * \
-                        np.tan(blading_params["sweep_angle"][i])
-                    rotated_upper_x += LE_coordinate - rotated_upper_x[0]
-                    rotated_lower_x += LE_coordinate - rotated_lower_x[0]
+                        LE_coordinate = blading_params["radial_stations"][i] * \
+                            np.tan(blading_params["sweep_angle"][i])
+                        rotated_upper_x += LE_coordinate - rotated_upper_x[0]
+                        rotated_lower_x += LE_coordinate - rotated_lower_x[0]
 
-                    (y_section_upper,
-                     y_section_lower,
-                     _,
-                     z_section_upper,
-                     z_section_lower,
-                     _) = fileHandlingMTFLO.PlanarToCylindrical(rotated_upper_y,
-                                                                rotated_lower_y,
-                                                                blading_params["radial_stations"][i])
+                        (y_section_upper,
+                        y_section_lower,
+                        _,
+                        z_section_upper,
+                        z_section_lower,
+                        _) = fileHandlingMTFLO.PlanarToCylindrical(rotated_upper_y,
+                                                                    rotated_lower_y,
+                                                                    blading_params["radial_stations"][i])
 
-                    # Compute the circumferential blade thickness
-                    circumferential_thickness = fileHandlingMTFLO.CircumferentialThickness(y_section_upper,
-                                                                                           z_section_upper,
-                                                                                           y_section_lower,
-                                                                                           z_section_lower,
-                                                                                           blading_params["radial_stations"][i])
+                        # Compute the circumferential blade thickness
+                        circumferential_thickness = fileHandlingMTFLO.CircumferentialThickness(y_section_upper,
+                                                                                            z_section_upper,
+                                                                                            y_section_lower,
+                                                                                            z_section_lower,
+                                                                                            blading_params["radial_stations"][i])
+
+                        # Only store the thickest case
+                        worst_circumf_thickness = circumferential_thickness.max()
+                        if worst_circumf_thickness > max_circumf_thickness:
+                            max_circumf_thickness = worst_circumf_thickness
 
                     # Check if the limit of complete blockage is respected by
                     # the design. If not, decrease the blade count by 1
-                    max_circumf_thickness = circumferential_thickness.max()
                     if max_circumf_thickness >= complete_blockage:
                         blading_params["blade_count"] -= 1
                         continue
@@ -599,15 +618,15 @@ class RepairIndividuals(Repair):
             _) = self.dvi.DeconstructDesignVector(individual,
                                                   compute_duct = False)
 
-            if config.OPTIMIZE_CENTERBODY:
+            if self.opt_cfg["OPTIMISE_CENTERBODY"]:
                 # Repair the centerbody parameters
                 centerbody_variables = self._enforce_one2one(centerbody_variables)
 
-            if config.OPTIMIZE_DUCT:
+            if self.opt_cfg["OPTIMISE_DUCT"]:
                 # Repair the duct parameters
                 duct_variables = self._enforce_one2one(duct_variables)
 
-            for j, optimise_stage in enumerate(config.OPTIMIZE_STAGE):
+            for j, optimise_stage in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
                 if optimise_stage:
                     # Repair the blading parameters
                     blade_blading_parameters[j] = self._enforce_blade_LE_positive_sweepback(blade_blading_parameters[j])
@@ -617,7 +636,7 @@ class RepairIndividuals(Repair):
                                                                  duct_variables)
 
                     # Loop over all the radial sections and repair the profile parameters
-                    for k in range(config.NUM_RADIALSECTIONS[j]):
+                    for k in range(self.geom["NUM_RADIALSECTIONS"][j]):
                         # Repair the profile parameters
                         blade_design_parameters[j][k] = self._enforce_one2one(blade_design_parameters[j][k])
 
@@ -665,6 +684,7 @@ if __name__ == "__main__":
     pop = InitPopulation().GeneratePopulation()
 
     pop_dict = [pop.get("X")[i] for i in range(len(pop))]
+    original_pop_dict = copy.deepcopy(pop_dict)
 
     # Create an instance of the RepairIndividuals class
     problem = OptimisationProblem()
@@ -672,22 +692,29 @@ if __name__ == "__main__":
     repair = RepairIndividuals()
     repaired_pop = repair._do(problem, pop_dict)
     print("Repair took:", time.monotonic() - start)
+    changed_individuals = sum(
+        before != after
+        for before, after in zip(original_pop_dict, repaired_pop)
+    )
 
     # Validate that repair worked
     dvi = DesignVectorInterface()
     failures_before = 0
     failures_after = 0
 
-    for individual in pop_dict:
+    for individual in original_pop_dict:
         try:
             dvi.DeconstructDesignVector(individual, compute_duct=False)
-        except ValueError:
+        except ValueError as e:
+            print(e)
             failures_before += 1
 
     for individual in repaired_pop:
         try:
             dvi.DeconstructDesignVector(individual, compute_duct=False)
-        except ValueError:
+        except ValueError as e:
+            print(e)
             failures_after += 1
 
-    print(f"Repair fixed {failures_before - failures_after} of {failures_before} invalid individuals")
+    print(f"Repair changed {changed_individuals} of {len(repaired_pop)} individuals")
+    print(f"Repair fixed {failures_before - failures_after} of {failures_before} structurally invalid individuals")

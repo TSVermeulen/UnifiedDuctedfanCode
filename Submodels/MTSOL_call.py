@@ -44,7 +44,7 @@ Versioning
 ------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 2.1
+Version: 2.2
 
 Changelog:
 - V0.0:   File created with empty class as placeholder.
@@ -79,6 +79,8 @@ Changelog:
 - V2.0.5: Replaced empty output generation with reading of default zeroed output
           for performance. Minor QoL improvements throughout.
 - V2.1:   Added cross-platform support for Linux and Windows.
+- V2.2:   Fixeds bug in HandleExitFlag where inviscid nonconverged outputs were
+          not stored correctly.
 """
 
 # Import standard libraries
@@ -648,10 +650,10 @@ class MTSOL_call:
                 line = ""
                 continue
 
-            if line.startswith('  Total power'):
+            if 'Total power' in line and 'CP' in line and 'EtaP' in line:
                 started_reading = True
                 forces_output.append(line)
-            elif line.startswith('                    CPK1'):
+            elif 'CPK1' in line:
                 # End of the usable section of the forces output,
                 # so break the loop
                 started_reading = False
@@ -959,6 +961,12 @@ class MTSOL_call:
         #If solver does not converge, call the non-convergence handler function.
         if exit_flag == ExitFlag.NON_CONVERGENCE:
             if handle_type == 'Inviscid':
+                # Preserve the current inviscid state and collect its forces
+                # before deciding whether to run the viscous solve. Returning
+                # here without collecting output leaves every output at zero.
+                self.WriteStateFile()
+                if generate_output:
+                    self.GenerateSolverOutput(output_type=output_type)
                 return
             if generate_output:
                 self.WriteStateFile()

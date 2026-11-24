@@ -6,7 +6,7 @@ Description
 -----------
 This module defines the DesignVector class, which is used to construct the
 design vector for the pymoo framework optimisation problem.
-The design vector supports mixed-variable optimization,
+The design vector supports mixed-variable optimisation,
 including real and integer variables.
 
 Classes
@@ -17,39 +17,41 @@ DesignVector
 Examples
 --------
 >>> from init_designvector import DesignVector
->>> from config import cfg
->>> design_vector = DesignVector.construct_vector(cfg)
+>>> design_vector = DesignVector.construct_vector()
 
 Notes
 -----
-This module integrates with the pymoo framework for optimization. Ensure that
-the configuration module (cfg) is properly set up with the required toggles and
-parameters for the design vector construction.
+Ensure the optimisation.json, geometry.json, operating_conditions.json, and
+baseline_design.json files are correctly configured in the GA/config directory.
 
 Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 1.3
+Version: 2.0
 
 Changelog:
 - V1.0: Initial implementation. Extracted from the problem_definition.py file
         for better modularity and readability.
 - V1.1: Implemented optional variable pitch handling.
 - V1.2: Made blade thickness distributions optional in the design vector.
-        Controlled in config using the OPTIMIZE_BLADETHICKNESS boolean. 
-- V1.3: Changed parameterisation to use blade root chord + taper distribution 
-        rather than blade chord distribution. This avoids needing to specify 
-        a chord repair operator. 
+        Controlled in config using the OPTIMIZE_BLADETHICKNESS boolean.
+- V1.3: Changed parameterisation to use blade root chord + taper distribution
+        rather than blade chord distribution. This avoids needing to specify
+        a chord repair operator.
+- V2.0: Updated to use new .json file-based configuration system.
 """
 
 # Import standard libraries
-from types import ModuleType
 from typing import ClassVar
 
 # Import 3rd party libraries
 import numpy as np
 from pymoo.core.variable import Real, Integer
+
+# Import utilities
+from utils import load_json_data
+
 
 class DesignVector:
     """
@@ -74,7 +76,7 @@ class DesignVector:
                       "trailing_camberline_angle": (0.05, 0.1),
                       "leading_edge_direction": (0.05, 0.2)}
 
-    # Initialize the profile vars as None
+    # Initialise the profile vars as None
     _cached_profile_vars: ClassVar[list | None] = None
     _cached_camberonly_profile_vars: ClassVar[list | None] = None
 
@@ -96,30 +98,30 @@ class DesignVector:
             should be part of the profile variables.
         """
         if include_thickness:
-            return [Real(bounds=cls.BP_3434_bounds["b_0"]),  # b_0
-                    Real(bounds=cls.BP_3434_bounds["b_2"]),  # b_2
-                    Real(bounds=cls.BP_3434_bounds["b_8"]),  # b_8 mapping variable
-                    Real(bounds=cls.BP_3434_bounds["b_15"]),  # b_15
-                    Real(bounds=cls.BP_3434_bounds["b_17"]),  # b_17
-                    Real(bounds=cls.BP_3434_bounds["x_t"]),  # x_t
-                    Real(bounds=cls.BP_3434_bounds["y_t"]),  # y_t
-                    Real(bounds=cls.BP_3434_bounds["x_c"]),  # x_c
-                    Real(bounds=cls.BP_3434_bounds["y_c"]),  # y_c
-                    Real(bounds=cls.BP_3434_bounds["z_TE"]),  # z_TE
-                    Real(bounds=cls.BP_3434_bounds["dz_TE"]),  # dz_TE
-                    Real(bounds=cls.BP_3434_bounds["r_LE"]),  # r_LE
-                    Real(bounds=cls.BP_3434_bounds["trailing_wedge_angle"]),  # trailing_wedge_angle
-                    Real(bounds=cls.BP_3434_bounds["trailing_camberline_angle"]),  # trailing_camberline_angle
-                    Real(bounds=cls.BP_3434_bounds["leading_edge_direction"])]  # leading_edge_direction
+            return [Real(bounds=cls.BP_3434_bounds["b_0"]),
+                    Real(bounds=cls.BP_3434_bounds["b_2"]),
+                    Real(bounds=cls.BP_3434_bounds["b_8"]),  # b8 mapping variable
+                    Real(bounds=cls.BP_3434_bounds["b_15"]),
+                    Real(bounds=cls.BP_3434_bounds["b_17"]),
+                    Real(bounds=cls.BP_3434_bounds["x_t"]),
+                    Real(bounds=cls.BP_3434_bounds["y_t"]),
+                    Real(bounds=cls.BP_3434_bounds["x_c"]),
+                    Real(bounds=cls.BP_3434_bounds["y_c"]),
+                    Real(bounds=cls.BP_3434_bounds["z_TE"]),
+                    Real(bounds=cls.BP_3434_bounds["dz_TE"]),
+                    Real(bounds=cls.BP_3434_bounds["r_LE"]),
+                    Real(bounds=cls.BP_3434_bounds["trailing_wedge_angle"]),
+                    Real(bounds=cls.BP_3434_bounds["trailing_camberline_angle"]),
+                    Real(bounds=cls.BP_3434_bounds["leading_edge_direction"])]
         else:
-            return [Real(bounds=cls.BP_3434_bounds["b_0"]),  # b_0
-                    Real(bounds=cls.BP_3434_bounds["b_2"]),  # b_2
-                    Real(bounds=cls.BP_3434_bounds["b_17"]),  # b_17
-                    Real(bounds=cls.BP_3434_bounds["x_c"]),  # x_c
-                    Real(bounds=cls.BP_3434_bounds["y_c"]),  # y_c
-                    Real(bounds=cls.BP_3434_bounds["z_TE"]),  # z_TE
-                    Real(bounds=cls.BP_3434_bounds["trailing_camberline_angle"]),  # trailing_camberline_angle
-                    Real(bounds=cls.BP_3434_bounds["leading_edge_direction"])]  # leading_edge_direction
+            return [Real(bounds=cls.BP_3434_bounds["b_0"]),
+                    Real(bounds=cls.BP_3434_bounds["b_2"]),
+                    Real(bounds=cls.BP_3434_bounds["b_17"]),
+                    Real(bounds=cls.BP_3434_bounds["x_c"]),
+                    Real(bounds=cls.BP_3434_bounds["y_c"]),
+                    Real(bounds=cls.BP_3434_bounds["z_TE"]),
+                    Real(bounds=cls.BP_3434_bounds["trailing_camberline_angle"]),
+                    Real(bounds=cls.BP_3434_bounds["leading_edge_direction"])]
 
 
     @classmethod
@@ -141,16 +143,14 @@ class DesignVector:
 
 
     @classmethod
-    def construct_vector(cls, cfg: ModuleType) -> dict:
+    def construct_vector(cls) -> dict:
         """
-        Initialize the pymoo design vector based on the toggles in config.
+        Initialise the pymoo design vector based on the toggles in config.
 
         Parameters
         ----------
         - cls : class
             The class. used to access the class-attribute BP_3434_bounds.
-        - cfg : ModuleType
-            The config module containing the design vector configuration.
 
         Returns
         -------
@@ -158,18 +158,24 @@ class DesignVector:
             A dictionary containing the design vector variables and their bounds.
         """
 
-        # Initialize variable list with variable types.
+        # Load optimisation config data from JSON files
+        optimisation_config = load_json_data("optimisation.json")
+        geometry_config = load_json_data("geometry.json")
+        operating_conditions = load_json_data("operating_conditions.json")
+        baseline_design = load_json_data("baseline_design.json")
+
+        # Initialise variable list with variable types.
         # This is required to handle the mixed-variable nature of the
         # optimisation, where the blade count is an integer
         vector = []
-        if cfg.OPTIMIZE_CENTERBODY:
+        if optimisation_config["OPTIMISE_CENTERBODY"]:
             # If the centerbody is to be optimised, initialise the variables
             complete_profile = cls.profile_section_vars()[0]
             section_profile = [complete_profile[i] for i in cls.CENTERBODY_VAR_INDICES]
 
             vector.extend(section_profile)
             vector.append(Real(bounds=(0.25, 4)))  # Chord Length
-        if cfg.OPTIMIZE_DUCT:
+        if optimisation_config["OPTIMISE_DUCT"]:
             # If the duct is to be optimised, intialise the variables
             duct_profile = cls.profile_section_vars()[0]
             duct_profile[6] = Real(bounds=(0.05, 0.2))  # set y_t for the duct
@@ -179,21 +185,20 @@ class DesignVector:
 
         # Pre-calculate the stage parameters to avoid repeated calculations
         stage_configs = []
-        num_operating_points = len(cfg.multi_oper)
-        for i in range(cfg.NUM_STAGES):
-            if cfg.OPTIMIZE_STAGE[i]:
-                num_radial_sections = cfg.NUM_RADIALSECTIONS[i]
+        for i in range(len(geometry_config["ROTATING"])):
+            if optimisation_config["OPTIMISE_STAGE"][i]:
+                num_radial_sections = geometry_config["NUM_RADIALSECTIONS"][i]
                 stage_configs.append({
                     'index': i,
                     'num_radial_sections': num_radial_sections,
-                    'is_rotating': cfg.ROTATING[i],
-                    'pitch_angles': len(cfg.STAGE_BLADING_PARAMETERS[i]["ref_blade_angle_lst"])
+                    'is_rotating': geometry_config["ROTATING"][i],
+                    'pitch_angles': len(baseline_design["blading_parameters"][i]["ref_blade_angles_deg"])
                 })
 
         # For the stage(s) marked for optimisation, add the profile design
         # variables to the design vector. Control of the thickness distribution
         # is global for all blade rows, so compute it outside of the loop
-        if cfg.OPTIMIZE_BLADETHICKNESS:
+        if optimisation_config["OPTIMISE_BLADETHICKNESS"]:
             section_blade_profile = cls.profile_section_vars()[0]
         else:
             section_blade_profile = cls.profile_section_vars()[1]
@@ -209,7 +214,7 @@ class DesignVector:
                 vector.append(Real(bounds=(0.1, 5 * np.pi/18)))  # ref_blade_angle from [~5.7deg to 50 deg]
             vector.append(Integer(bounds=(3, 15)))  # blade_count
             if stage_config['is_rotating']:
-                for _ in range(num_operating_points):
+                for _ in range(operating_conditions["num_operating_points"]):
                     vector.append(Real(bounds=(20, 80)))  # blade RPS
             vector.append(Real(bounds=(1.0, 3.0)))  # blade diameter
 
@@ -231,7 +236,6 @@ class DesignVector:
 
 
 if __name__ == "__main__":
-    import config # type: ignore
     test = DesignVector()
-    vector = test.construct_vector(config)
+    vector = test.construct_vector()
     print(vector)

@@ -32,7 +32,7 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 1.8.1
+Version: 2.0.0
 
 Changelog:
 - V1.0:   Initial implementation with basic equality and inequality constraints.
@@ -52,6 +52,8 @@ Changelog:
 - V1.8:   Removed unnecessary rounding of constraint values.
 - V1.8.1: Formalised hidden constraint handling approach by setting
           infeasible_CV=np.inf rather than 1e12.
+- V2.0.0: Updated to use new .json based configuration files. Implemented some
+          cleanups to speed up evaluation.
 """
 
 # Import standard libraries
@@ -64,6 +66,7 @@ import numpy as np
 # Import analysis configuration and Parameterisation class
 import config # type: ignore
 from Submodels.Parameterisations import AirfoilParameterisation # type: ignore
+from utils import load_json_data # type: ignore
 
 # Define type alias for AnalysisOutputs
 AnalysisOutputs = dict[str, dict[str, float] | dict[str, dict[str, float]]]
@@ -110,6 +113,10 @@ class Constraints:
         self._cached_ineq_constraints = None
         self._cached_eq_constraints = None
         self._cached_constraint_ids = None
+
+        # Load configuration data
+        self.opt_cfg = load_json_data("optimisation.json")
+        self.geom = load_json_data("geometry.json")
 
 
     def _calculate_power(self,
@@ -240,7 +247,7 @@ class Constraints:
             The computed normalised power constraint. This is a scalar value
             representing the power of the system.
         """
-        return (power - self.ref_power) / self.ref_power
+        return (power - self.oper["reference_power"]) / self.oper["reference_power"]
 
 
     def OnlyImprovedEnergy(self,
@@ -262,27 +269,31 @@ class Constraints:
         Returns
         -------
         - Energy : float
-            A float of the energy used to power the ducted fan during the
-            flight phase. This is computed as the product of the power and the
-            time spent in the flight phase.
+            A float fraction defined as energy/reference_energy - 1, i.e. the
+            constraint value. Energy is computed as the product of the power
+            and the time spent in each of the flight phases.
         """
 
         if isinstance(outputs, list):
             # If outputs is a list, we are solving for a multi-point
             # optimisation problem, so we sum the total energy for all points.
             energy = 0
+            ref_energy = 0
             for idx, output in enumerate(outputs):
                 # Set the correct operating condition to compute the power
                 self.oper = self.multi_oper[idx]
                 power = self._calculate_power(output, Lref)
                 energy += power * self.oper["flight_phase_time"]
+                ref_energy += self.oper["reference_power"] * self.oper["flight_phase_time"]
+
         else:
             # If outputs is a single dictionary,
             # we are solving for a single-point optimisation problem.
             power = self._calculate_power(outputs, Lref)
             energy = power * self.oper["flight_phase_time"]
+            ref_energy = self.oper["reference_power"] * self.oper["flight_phase_time"]
 
-        return energy / config.reference_energy - 1
+        return energy / ref_energy - 1
 
 
     def KeepEfficiencyFeasibleUpper(self,
@@ -356,7 +367,8 @@ class Constraints:
             from the reference value.
         """
 
-        return abs(thrust / self.ref_thrust - 1) - config.deviation_range
+        return abs(thrust / self.oper["reference_thrust"] - 1) \
+            - self.opt_cfg["CONSTRAINT_DEVIATION_RANGE"]
 
 
     def FrontalArea(self,
@@ -368,7 +380,7 @@ class Constraints:
         """
         Compute the frontal area of the ducted propeller/fan.
         Enforces that the normalised frontal area is less than
-        config.MAX_FRONTAL_AREA_RATIO.
+        MAX_FRONTAL_AREA_RATIO.
 
         Returns
         -------
@@ -399,7 +411,7 @@ class Constraints:
         upper_y = upper_y * chord
 
         # Compute the maximum radius
-        max_radius = self.duct_values["Leading Edge Coordinates"][1] + \
+        max_radius = self.duct_values["Leading Edge Y-Coordinate"] + \
             np.max(upper_y)
 
         # Since we deal with axisymmetric geometry,
@@ -409,8 +421,8 @@ class Constraints:
         # Return the frontal area normalised by the reference frontal area in
         # config. This is needed to ensure all objectives are of the same order
         # of magnitude and thus have equal weight to the GA optimiser.
-        return frontal_area / config.REF_FRONTAL_AREA - \
-            config.MAX_FRONTAL_AREA_RATIO
+        return frontal_area / self.geom["REF_FRONTAL_AREA"] - \
+            self.opt_cfg["MAX_FRONTAL_AREA_RATIO"]
 
 
     def _get_filtered_constraints(self):
@@ -458,12 +470,6 @@ class Constraints:
 
         Notes
         -----
-            - The function uses `config.constraint_IDs` to determine which
-              constraints to compute.
-            - `config.constraint_IDs[0]` specifies the indices of inequality
-              constraints.
-            - `config.constraint_IDs[1]` specifies the indices of equality
-              constraints.
             - If no constraints are specified, the corresponding output
               arrays ("G" or "H") will be empty.
         """
@@ -479,45 +485,35 @@ class Constraints:
         thrust = self._calculate_thrust(analysis_outputs, Lref)
         power = self._calculate_power(analysis_outputs, Lref)
 
-        # Set the reference values to self
-        # Uses only the first entries in th elist since this is a
-        # single-point evaluation.
-        self.ref_power = config.P_ref_constr[0]
-        self.ref_thrust = config.T_ref_constr[0]
-
         # Compute the inequality constraints and write them to out["G"]
         if ineq_constraints:
-            computed_ineq_constraints = [constraint(analysis_outputs,
+            if self.design_okay:
+                out["G"] = np.array([constraint(analysis_outputs,
                                                     Lref,
                                                     thrust,
                                                     power)
-                                         for constraint in ineq_constraints]
-
-            if self.design_okay:
-                out["G"] = np.array(computed_ineq_constraints,
+                                     for constraint in ineq_constraints],
                                     dtype=float)
             else:
                 # If the design is infeasible, set a really high constraint
                 # violation to steer the optimizer away.
-                out["G"] = np.full(len(computed_ineq_constraints),
+                out["G"] = np.full(len(ineq_constraints),
                                    self.INFEASIBLE_CV,
                                    dtype=float)
 
         # Compute the equality constraints and write them to out["H"]
         if eq_constraints:
-            computed_eq_constraints = [constraint(analysis_outputs,
+            if self.design_okay:
+                out["H"] = np.array([constraint(analysis_outputs,
                                                   Lref,
                                                   thrust,
                                                   power)
-                                       for constraint in eq_constraints]
-
-            if self.design_okay:
-                out["H"] = np.array(computed_eq_constraints,
+                                     for constraint in eq_constraints],
                                     dtype=float)
             else:
                 # If the design is infeasible, set a really high constraint
                 # violation to steer the optimizer away.
-                out["H"] = np.full(len(computed_eq_constraints),
+                out["H"] = np.full(len(eq_constraints),
                                    self.INFEASIBLE_CV,
                                    dtype=float)
         else:
@@ -533,13 +529,7 @@ class Constraints:
         """Helper method to compute constraints for multi-point analysis."""
         computed_constraints = []
 
-        # Pre-extract reference values to avoid repeated config access
-        ref_thrusts = config.T_ref_constr
-        ref_powers = config.P_ref_constr
-
         for i, outputs in enumerate(analysis_outputs):
-            self.ref_thrust = ref_thrusts[i]
-            self.ref_power = ref_powers[i]
             self.oper = self.multi_oper[i]
             computed_constraints.extend([constraint(outputs,
                                                     Lref,
@@ -580,12 +570,6 @@ class Constraints:
 
         Notes
         -----
-            - The function uses `config.constraint_IDs` to determine which
-              constraints to compute.
-            - `config.constraint_IDs[0]` specifies the indices of inequality
-              constraints.
-            - `config.constraint_IDs[1]` specifies the indices of equality
-              constraints.
             - If no constraints are specified, the corresponding output arrays
               ("G" or "H") will be empty.
         """
@@ -632,63 +616,46 @@ class Constraints:
 
         # Compute the equality constraints and write them to out["H"]
         if eq_constraints:
-            computed_eq_constraints = self._compute_multi_point_constraints(eq_constraints,
-                                                                            analysis_outputs,
-                                                                            Lref,
-                                                                            thrust,
-                                                                            power)
             if self.design_okay:
+                computed_eq_constraints = self._compute_multi_point_constraints(eq_constraints,
+                                                                                analysis_outputs,
+                                                                                Lref,
+                                                                                thrust,
+                                                                                power)
                 out["H"] = np.array(computed_eq_constraints, dtype=float)
             else:
                 # If the design is infeasible, set a really high constraint
                 # violation to steer the optimizer away.
-                out["H"] = np.full(len(computed_eq_constraints),
+                out["H"] = np.full(len(eq_constraints),
                                    self.INFEASIBLE_CV,
                                    dtype=float)
 
 
 if __name__ == "__main__":
-    # Test execution of constraints using a test-case forces output.
-
-    # Add the parent and submodels paths to the system path
-    import sys
-    from pathlib import Path
-    # Add the parent and submodels paths to the system path if they are not
-    # already in the path
-    parent_path = str(Path(__file__).resolve().parent.parent)
-    submodels_path = str(Path(__file__).resolve().parent.parent / "Submodels")
-
-    if parent_path not in sys.path:
-        sys.path.append(parent_path)
-
-    if submodels_path not in sys.path:
-        sys.path.append(submodels_path)
-
-    # Import MTFLOW interface submodels and other dependencies
+    # Test execution of constraints using a blank forces output.
+    from utils import load_json_data, ensure_repo_paths #type: ignore
     from Submodels.output_handling import output_processing #type: ignore
 
-    # Extract outputs from the forces output file
-    outputs = output_processing(analysis_name='test_case').GetAllVariables()
+    # Set up paths correctly
+    ensure_repo_paths()
+
+    # Extract blank forces output data
+    outputs = output_processing().GetAllVariables()
+
+    # Load geometry
+    geometry = load_json_data("geometry.json")
+    baseline_design = load_json_data("baseline_design.json")
 
     # Create an instance of the Constraints class
-    test = Constraints(config.CENTERBODY_VALUES,
-                       config.DUCT_VALUES,
-                       config.STAGE_BLADING_PARAMETERS,
+    test = Constraints(baseline_design["CENTERBODY_VALUES"],
+                       baseline_design["DUCT_VALUES"],
+                       baseline_design["blading_parameters"],
                        design_okay=True)
 
-    # Compute the constraints - single point constraint analysis
+    # Compute the constraints
     output = {}
-    test.ComputeConstraints(outputs,
-                            Lref=config.BLADE_DIAMETERS[0],
-                            oper=config.multi_oper[0],
-                            out=output)
-
-    print(output)
-
-    # Compute the constraints - multi-point constraint analysis
-    output = {}
-    test.ComputeMultiPointConstraints([outputs, outputs],
-                                      Lref=config.BLADE_DIAMETERS[0],
+    test.ComputeMultiPointConstraints([outputs],
+                                      Lref=geometry["REFERENCE_STAGE_DIAMETERS"][0],
                                       oper=config.multi_oper,
                                       out=output)
 
