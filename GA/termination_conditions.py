@@ -24,13 +24,14 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 1.2
+Version: 2.0
 
 Changelog:
 - V1.0: Initial implementation.
 - V1.1: Updated termination conditions for much needed improvement in multi-objective optimisation.
 - V1.2: Updated consistency in multi-objective termination conditions.
 - V1.3: Made sliding window size an input from the config file r.t. constant.
+- V2.0: Added support for new .json-based configuration.
 """
 
 # Import 3rd party libraries
@@ -41,34 +42,43 @@ from pymoo.termination.xtol import DesignSpaceTermination
 from pymoo.termination import get_termination
 from pymoo.termination.collection import TerminationCollection
 
-# Import configuration module
+# Import utils and config
+from utils import load_json_data #type: ignore
 import config #type: ignore
 
 def GetTerminationConditions():
     """
     Simple function to set the termination conditions and ensure a single source of truth across different optimisation scripts.
     """
+
+    # Load optimisation config from .json file
+    opt_cfg = load_json_data("optimisation.json")
+
     if len(config.objective_IDs) == 1:
         # Set termination conditions for a single objective optimisation
         term_conditions = TerminationCollection(RobustTermination(SingleObjectiveSpaceTermination(tol=1E-5,
                                                                                                   only_feas=True),
-                                                                                                  period=config.SLIDING_WINDOW_SIZE),  # Change in objective value termination condition
-                                                get_termination("n_gen", config.MAX_GENERATIONS),  # Maximum generation count termination condition
+                                                                                                  period=opt_cfg["SLIDING_WINDOW_SIZE"]),  # Change in objective value termination condition
+                                                get_termination("n_gen",
+                                                                opt_cfg["MAX_GENERATIONS"]),  # Maximum generation count termination condition
                                                 RobustTermination(DesignSpaceTermination(tol=1E-3),
-                                                                  period=config.SLIDING_WINDOW_SIZE),  # Maximum change in design vector termination condition
-                                                RobustTermination(ConstraintViolationTermination(tol=1E-8, terminate_when_feasible=False),
-                                                                  period=config.SLIDING_WINDOW_SIZE)  # Maximum change in constriant violation termination condition
+                                                                  period=opt_cfg["SLIDING_WINDOW_SIZE"]),  # Maximum change in design vector termination condition
+                                                RobustTermination(ConstraintViolationTermination(tol=1E-8,
+                                                                                                 terminate_when_feasible=False),
+                                                                  period=opt_cfg["SLIDING_WINDOW_SIZE"])  # Maximum change in constriant violation termination condition
                                                 )
     else:
         # Set termination conditions for a multiobjective optimisation
         term_conditions = TerminationCollection(RobustTermination(MultiObjectiveSpaceTermination(tol=1E-3,
                                                                                           only_feas=True),
-                                                                                          period=config.SLIDING_WINDOW_SIZE),  # Change in objective value termination condition
-                                                get_termination("n_gen", config.MAX_GENERATIONS),  # Maximum generation count termination condition
+                                                                                          period=opt_cfg["SLIDING_WINDOW_SIZE"]),  # Change in objective value termination condition
+                                                get_termination("n_gen",
+                                                                opt_cfg["MAX_GENERATIONS"]),  # Maximum generation count termination condition
                                                 RobustTermination(DesignSpaceTermination(tol=1E-3),
-                                                                  period=config.SLIDING_WINDOW_SIZE),  # Maximum change in design vector termination condition
-                                                RobustTermination(ConstraintViolationTermination(tol=1E-8, terminate_when_feasible=False),
-                                                                  period=config.SLIDING_WINDOW_SIZE)  # Maximum change in constriant violation termination condition
+                                                                  period=opt_cfg["SLIDING_WINDOW_SIZE"]),  # Maximum change in design vector termination condition
+                                                RobustTermination(ConstraintViolationTermination(tol=1E-8,
+                                                                                                 terminate_when_feasible=False),
+                                                                  period=opt_cfg["SLIDING_WINDOW_SIZE"])  # Maximum change in constriant violation termination condition
                                                 )
 
 

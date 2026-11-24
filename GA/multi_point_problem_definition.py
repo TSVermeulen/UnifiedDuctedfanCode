@@ -2,6 +2,14 @@
 multi_point_problem_definition
 ==================
 
+DEPRECATED
+
+This module is no longer used in the current framework and should not be used
+for new development. It is retained solely for backwards compatibility with
+legacy optimization setups and older configuration files.
+
+Use `problem_definition.py` instead.
+
 Description
 -----------
 This module defines an optimization problem for a multi-point optimisation at n
@@ -37,13 +45,15 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version: 2.1
+Version: 2.1.1
 
 Changelog:
-- V1.0: Initial implementation.
-- V2.0: Renamed MTFLOW_caller to UDC for consistency with written thesis.
-        Updated imports to reflect new structure.
-- V2.1: Updated formatting. Implemented variable pitch.
+- V1.0:   Initial implementation.
+- V2.0:   Renamed MTFLOW_caller to UDC for consistency with written thesis.
+          Updated imports to reflect new structure.
+- V2.1:   Updated formatting. Implemented variable pitch.
+- V2.1.1: Made module DEPRACATED. Updated docstrings and comments to reflect
+          deprecation status. Added warning to inform users.
 """
 
 # Import standard libraries
@@ -52,6 +62,7 @@ import uuid
 import datetime
 import copy
 import contextlib
+import warnings
 from pathlib import Path
 from typing import ClassVar, Any
 
@@ -114,7 +125,7 @@ class MultiPointOptimizationProblem(ElementwiseProblem):
                                                'CTp': 0.00000,
                                                'Xtr': 0.00000}}}
 
-    _DESIGN_VARS = DesignVector.construct_vector(config)
+    _DESIGN_VARS = DesignVector.construct_vector()
 
     _base_oper = copy.deepcopy(config.multi_oper[0])
 
@@ -137,6 +148,11 @@ class MultiPointOptimizationProblem(ElementwiseProblem):
         -------
         None
         """
+
+        warnings.warn('The MultiPointOptimizationProblem class is deprecated. ' \
+                      'Use the OptimisationProblem class in problem_definition.py instead.',
+                      DeprecationWarning,
+                      stacklevel=2)
 
         self.verbose = verbose
 
@@ -465,7 +481,7 @@ class MultiPointOptimizationProblem(ElementwiseProblem):
         """
 
         # Detect global fixed-pitch multi-point:
-        all_fixed_pitch = all(len(blading_params["ref_blade_angle_lst"]) == 1
+        all_fixed_pitch = all(len(blading_params["ref_blade_angles"]) == 1
                               for blading_params in self.blade_blading_parameters
                               )
 
@@ -477,9 +493,9 @@ class MultiPointOptimizationProblem(ElementwiseProblem):
 
         # Otherwise, set the correct pitch angle per stage (variable or fixed)
         for blading_params in self.blade_blading_parameters:
-            if len(blading_params["ref_blade_angle_lst"]) == len(self.multi_oper):
+            if len(blading_params["ref_blade_angles"]) == len(self.multi_oper):
                 # Variable pitch - select angle for this operating condition
-                blading_params["ref_blade_angle"] = blading_params["ref_blade_angle_lst"][oper_idx]
+                blading_params["ref_blade_angle"] = blading_params["ref_blade_angles"][oper_idx]
             # For fixed pitch stages we keep the single-angle as-is.
 
         # Overwrite the UDC input file to the correct inputs

@@ -20,14 +20,14 @@ References
 Versioning
 ----------
 Author: T.S. Vermeulen
-Email: T.S.Vermeulen@student.tudelft.nl
-Student ID 4995309
-Version: 1.2
+Email: T.S.Vermeulen@tudelft.nl
+Version: 1.3
 
 Changelog:
 - V1.0: Initial complete validated version.
 - V1.1: Added documentation and type hinting.
 - V1.2: Updated documentation and updated interface with UDC to reflect MTSOL V2.0 interface
+- V1.3: Updated to use new .json-based configuration setup and cleaned up variable naming.
 """
 
 # Import standard libraries
@@ -61,7 +61,7 @@ MAJOR_GRID_ALPHA = 0.6
 MINOR_GRID_ALPHA = 0.4
 
 # First we define some constants and the operating conditions which will be analysed
-REFERENCE_BLADE_ANGLE = np.array([np.deg2rad(19), np.deg2rad(29)])  # radians, converted from degrees
+REFERENCE_BLADE_ANGLE = np.array([np.deg2rad(24.5), np.deg2rad(14.5)])  # radians, converted from degrees
 ANALYSIS_NAME = "X22A_validation"  # Analysis name for MTFLOW
 ALTITUDE = 0  # m
 FAN_DIAMETER = 7 * 0.3048  # m, taken from [3] and converted to meters from feet
@@ -71,7 +71,8 @@ L_REF = FAN_DIAMETER  # m, reference length for use by MTFLOW
 def GenerateMTFLOBlading(Omega: float,
                          ref_blade_angle: float,
                          plot : bool,
-                         ) -> tuple[list[dict[str, float | np.typing.NDArray[np.floating]], list[list[dict[str, float | np.floating]]]]]:
+                         ) -> tuple[list[dict[str, float | np.typing.NDArray[np.floating]]],
+                                    list[list[dict[str, float]]]]:
     """
     Generate MTFLO blading.
     The blading parameters are based on Figure 3 in [1].
@@ -87,47 +88,47 @@ def GenerateMTFLOBlading(Omega: float,
 
     Returns
     -------
-    - tuple[list[dict[str, float | np.typing.NDArray[np.floating]]], list[list[dict[str, float | np.floating]]]]:
+    - tuple[list[dict[str, float | np.typing.NDArray[np.floating]]], list[list[dict[str, float]]]]:
         A tuple of two lists:
         - blading_parameters : list[dict[str, float | np.typing.NDArray[np.floating]]]
             A list containing dictionaries with the blading parameters.
-        - design_parameters : list[list[dict[str, float | np.floating]]]
+        - design_parameters : list[list[dict[str, float]]]
             A list containing dictionaries with the design parameters for each radial station.
     """
 
     # Start defining the MTFLO blading inputs
-    propeller_parameters = {"root_LE_coordinate": 0.1495672948767407, "rotational_rate": Omega, "ref_blade_angle": ref_blade_angle, "reference_section_blade_angle": np.deg2rad(20), "blade_count": 3, "radial_stations": np.array([0,
-                                                                                                                                                                                                                      0.2,
-                                                                                                                                                                                                                      0.3,
-                                                                                                                                                                                                                      0.4,
-                                                                                                                                                                                                                      0.5,
-                                                                                                                                                                                                                      0.6,
-                                                                                                                                                                                                                      0.7,
-                                                                                                                                                                                                                      0.8,
-                                                                                                                                                                                                                      0.9,
-                                                                                                                                                                                                                      1]).astype(float) * FAN_DIAMETER / 2,
-                                                                                                                                                                                    "chord_length": np.array([0.3510,
-                                                                                                                                                                                                              0.3510,
-                                                                                                                                                                                                              0.3152,
-                                                                                                                                                                                                              0.2794,
-                                                                                                                                                                                                              0.2528,
-                                                                                                                                                                                                              0.2413,
-                                                                                                                                                                                                              0.2367,
-                                                                                                                                                                                                              0.2309,
-                                                                                                                                                                                                              0.2251,
-                                                                                                                                                                                                              0.2205]).astype(float),
-                                                                                                                                                                                    "blade_angle": np.array([np.deg2rad(53.6),
-                                                                                                                                                                                                             np.deg2rad(53.6),
-                                                                                                                                                                                                             np.deg2rad(46.8),
-                                                                                                                                                                                                             np.deg2rad(39.5),
-                                                                                                                                                                                                             np.deg2rad(32.3),
-                                                                                                                                                                                                             np.deg2rad(26.4),
-                                                                                                                                                                                                             np.deg2rad(22.3),
-                                                                                                                                                                                                             np.deg2rad(19.1),
-                                                                                                                                                                                                             np.deg2rad(16.8),
-                                                                                                                                                                                                             np.deg2rad(15.5)]).astype(float)}
+    propeller_parameters = {"root_LE_coordinate": 0.1495672948767407, "rotational_rate": Omega, "ref_blade_angle": ref_blade_angle, "blade_count": 3, "radial_stations": np.array([0,
+                                                                                                                                                                                   0.2,
+                                                                                                                                                                                   0.3,
+                                                                                                                                                                                   0.4,
+                                                                                                                                                                                   0.5,
+                                                                                                                                                                                   0.6,
+                                                                                                                                                                                   0.7,
+                                                                                                                                                                                   0.8,
+                                                                                                                                                                                   0.9,
+                                                                                                                                                                                   1]).astype(float) * FAN_DIAMETER / 2,
+                                                                                                                                                      "chord_length": np.array([0.3510,
+                                                                                                                                                                                0.3510,
+                                                                                                                                                                                0.3152,
+                                                                                                                                                                                0.2794,
+                                                                                                                                                                                0.2528,
+                                                                                                                                                                                0.2413,
+                                                                                                                                                                                0.2367,
+                                                                                                                                                                                0.2309,
+                                                                                                                                                                                0.2251,
+                                                                                                                                                                                0.2205]).astype(float),
+                                                                                                                                                      "blade_angle": np.array([np.deg2rad(38.1),
+                                                                                                                                                                               np.deg2rad(38.1),
+                                                                                                                                                                               np.deg2rad(31.3),
+                                                                                                                                                                               np.deg2rad(24),
+                                                                                                                                                                               np.deg2rad(16.8),
+                                                                                                                                                                               np.deg2rad(10.9),
+                                                                                                                                                                               np.deg2rad(6.3),
+                                                                                                                                                                               np.deg2rad(3.6),
+                                                                                                                                                                               np.deg2rad(1.3),
+                                                                                                                                                                               np.deg2rad(0)]).astype(float)}
 
-    horizontal_strut_parameters = {"root_LE_coordinate": 0.57785, "rotational_rate": 0, "ref_blade_angle": 0, "reference_section_blade_angle": 0, "blade_count": 4, "radial_stations": np.array([0.05,
+    horizontal_strut_parameters = {"root_LE_coordinate": 0.57785, "rotational_rate": 0, "ref_blade_angle": 0, "blade_count": 4, "radial_stations": np.array([0.05,
                                                                                                                                                                                     1]) * 1.15,
                                                                                                                                                                                     "chord_length": np.array([0.57658,
                                                                                                                                                                                                               0.14224]),
@@ -136,7 +137,7 @@ def GenerateMTFLOBlading(Omega: float,
                                                                                                                                                                                     "sweep_angle": np.array([0,
                                                                                                                                                                                                              0])}
 
-    diagonal_strut_parameters = {"root_LE_coordinate": 0.577723, "rotational_rate": 0, "ref_blade_angle": 0, "reference_section_blade_angle": 0, "blade_count": 2, "radial_stations": np.array([0.05,
+    diagonal_strut_parameters = {"root_LE_coordinate": 0.577723, "rotational_rate": 0, "ref_blade_angle": 0, "blade_count": 2, "radial_stations": np.array([0.05,
                                                                                                                                                                                     1]) * 1.15,
                                                                                                                                                                                     "chord_length": np.array([0.10287,
                                                                                                                                                                                                               0.10287]),
@@ -153,13 +154,14 @@ def GenerateMTFLOBlading(Omega: float,
     # Define the sweep angles
     # Note that this is approximate, since the rotation of the chord line is not completely accurate when rotating a complete profile
     sweep_angle = np.zeros_like(blading_parameters[0]["chord_length"])
-    root_blade_angle = (np.deg2rad(53.6) + blading_parameters[0]["ref_blade_angle"] - blading_parameters[0]["reference_section_blade_angle"])
+    root_blade_angle = (blading_parameters[0]["blade_angle"][0] +
+                        blading_parameters[0]["ref_blade_angle"])
     root_rotation_angle = np.pi / 2 - root_blade_angle
 
     root_LE = blading_parameters[0]["root_LE_coordinate"] # The location of the root LE is arbitrary for computing the sweep angles.
     root_mid_chord = root_LE + (0.3510 / 2) * np.cos(root_rotation_angle)
     for i in range(len(blading_parameters[0]["chord_length"])):
-        blade_angle = (blading_parameters[0]["blade_angle"][i] + blading_parameters[0]["ref_blade_angle"] - blading_parameters[0]["reference_section_blade_angle"])
+        blade_angle = (blading_parameters[0]["blade_angle"][i] + blading_parameters[0]["ref_blade_angle"])
         rotation_angle = np.pi / 2 - blade_angle
 
         # Compute sweep such that the midchord line is constant.
@@ -178,7 +180,7 @@ def GenerateMTFLOBlading(Omega: float,
         x_mid_arr = np.zeros_like(x_LE_arr)
 
         for section in range(len(blading_parameters[0]["radial_stations"])):
-            rotation_angle = np.pi/2 - (blading_parameters[0]["blade_angle"][section] + blading_parameters[0]["ref_blade_angle"] - blading_parameters[0]["reference_section_blade_angle"])
+            rotation_angle = np.pi/2 - (blading_parameters[0]["blade_angle"][section] + blading_parameters[0]["ref_blade_angle"])
             x_LE = root_LE + blading_parameters[0]["radial_stations"][section] * np.tan(blading_parameters[0]["sweep_angle"][section])
 
             x_TE = x_LE + blading_parameters[0]["chord_length"][section] * np.cos(rotation_angle)
@@ -371,7 +373,7 @@ def GenerateMTSETGeometry() -> None:
                                                              )(interpolated_centerbody_x)
 
 
-    CENTERBODY_VALUES = {"b_0": 0.05, "b_2": 0.125, "b_8": 7.52387039e-02, "b_15": 7.46448823e-01, "b_17": 0.8, 'x_t': 0.29842005729819904, 'y_t': 0.12533559300869632, 'x_c': 0.3, 'y_c': 0., 'z_TE': 0., 'dz_TE': 0.00277173368735548, 'r_LE': -0.06946118699675888, 'trailing_wedge_angle': 0.27689037361278407, 'trailing_camberline_angle': 0., 'leading_edge_direction': 0., "Chord Length": 1.5, "Leading Edge Coordinates": (0., 0.)}
+    CENTERBODY_VALUES = {"b_0": 0.05, "b_2": 0.125, "b_8": 7.52387039e-02, "b_15": 7.46448823e-01, "b_17": 0.8, 'x_t': 0.29842005729819904, 'y_t': 0.12533559300869632, 'x_c': 0.3, 'y_c': 0., 'z_TE': 0., 'dz_TE': 0.00277173368735548, 'r_LE': -0.06946118699675888, 'trailing_wedge_angle': 0.27689037361278407, 'trailing_camberline_angle': 0., 'leading_edge_direction': 0., "Chord Length": 1.5, "Leading Edge X-Coordinate": 0.}
 
     plt.figure("cb geometry", figsize=get_figsize(wf=0.75))
     naca_x, naca_y, _, _, = AirfoilParameterisation().ComputeProfileCoordinates(CENTERBODY_VALUES)
@@ -391,8 +393,6 @@ def GenerateMTSETGeometry() -> None:
     plt.ylim(bottom=0)
     plt.show()
 
-
-
     # Transform the data to the correct format
     # Ensures leading edge data point only occurs once to make sure a smooth spline is constructed, in accordance with the MTFLOW documentation.
     centerbody_x_complete = np.concatenate((np.flip(interpolated_centerbody_x), interpolated_centerbody_x[1:]), axis=0)
@@ -401,8 +401,8 @@ def GenerateMTSETGeometry() -> None:
 
     # Generate MTSET input file walls.X22A_validation
     # To run the GenerateMTSETInput() function, we need to define the params_CB and params_duct dictionaries, so fill them with the minimum required inputs
-    params_CB = {"Leading Edge Coordinates": (centerbody_x.min(),0), "Chord Length": (lower_x.max() - lower_x.min())}
-    params_duct = {"Leading Edge Coordinates": (x_duct.min(), upper_y[-1]), "Chord Length": (lower_x.max() - lower_x.min())}
+    params_CB = {"Leading Edge X-Coordinate": centerbody_x.min(), "Leading Edge Y-Coordinate": 0, "Chord Length": (lower_x.max() - lower_x.min())}
+    params_duct = {"Leading Edge X-Coordinate": x_duct.min(), "Leading Edge Y-Coordinate": upper_y[-1], "Chord Length": (lower_x.max() - lower_x.min())}
 
     # Generate the walls.x22a_validation
     fileHandlingMTSET(params_CB=params_CB,
@@ -547,8 +547,8 @@ def ExecuteParameterSweep(omega: np.typing.NDArray[np.floating],
                                                          generate_output=True)
 
             # Extract outputs
-            if exit_flag in (ExitFlag.SUCCESS, 
-                             ExitFlag.COMPLETED, ExitFlag.NON_CONVERGENCE): 
+            if exit_flag in (ExitFlag.SUCCESS,
+                             ExitFlag.COMPLETED, ExitFlag.NON_CONVERGENCE):
                 CT = output_data['data']['Total force CT']
                 CP = output_data['data']['Total power CP']
                 etaP = output_data['data']['EtaP']
@@ -597,7 +597,7 @@ if __name__ == "__main__":
     etaP = np.zeros((ncols, nrows))
 
     for i in range(len(REFERENCE_BLADE_ANGLE)):
-        print(f"Analysing beta_{75}={round(np.rad2deg(REFERENCE_BLADE_ANGLE[i]), 2)} deg")
+        print(f"Analysing beta_tip={round(np.rad2deg(REFERENCE_BLADE_ANGLE[i]), 2)} deg")
         CT_out, CP_out, eta_out = ExecuteParameterSweep(omega=OMEGA,
                                                         inlet_mach=inlet_mach,
                                                         reynolds_inlet=reynolds_inlet,

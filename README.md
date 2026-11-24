@@ -1,5 +1,8 @@
 # The Unified Ducted fan Code and Ducted Fan Optimisation Framework
 
+***Current Version: v2.2.0***
+***Latest Official Release: v2.1.1***
+
 This repository contains the codebase developed for the **Unified Ducted fan Code (UDC)** and its implementation into a ducted fan optimisation framework using the **Unified Non-dominated Sorting Genetic Algorithm III (U-NSGA-III)**.
 
 The UDC was first developed in T.S. Vermeulen's [MSc thesis](https://repository.tudelft.nl/record/uuid:21c8fb7b-f2d5-4c79-a43c-367cc1537764), and subsequently improved and expanded during the corresponding author's PhD project in late 2025/early 2026 to support the writing of a conference paper for the ASME 2026 Turbo Expo [1] and accompanying journal article in the Journal of Engineering for Gas Turbines and Power [2].
@@ -36,7 +39,15 @@ For more details on the different (sub-)modules of the optimisation framework, p
 │   ├── __init__.py
 │   ├── checkpoint.py
 │   ├── config.py
-│   ├── config_original.py
+│   ├── config
+│   │   ├── baseline_design.json
+│   │   ├── geometry.json
+│   │   ├── operating_conditions.json
+│   │   ├── operating_conditions_climb.json
+│   │   ├── operating_conditions_combat.json
+│   │   ├── operating_conditions_endurance.json
+│   │   ├── operating_conditions_endurance_mission.json
+│   │   └── optimisation.json
 │   ├── constraints.py
 │   ├── design_vector_interface.py
 │   ├── init_designvector.py
@@ -44,10 +55,11 @@ For more details on the different (sub-)modules of the optimisation framework, p
 │   ├── main-parallelised-UNSGAIII.py
 │   ├── main-parallelised.py
 │   ├── main.py
-│   ├── multi_point_problem_definition.py
+│   ├── multi_point_problem_definition.py  # DEPRECATED, retained for backward compatibility
 │   ├── objectives.py
+│   ├── parallelisation.py
 │   ├── post.py
-│   ├── problem_definition.py
+│   ├── problem_definition.py  # Current implementation
 │   ├── README.md
 │   ├── repair.py
 │   ├── termination_conditions.py
@@ -107,7 +119,7 @@ For more details on the different (sub-)modules of the optimisation framework, p
 └── requirements.txt
 ```
 
-The `./GA/` folder contains the developed **ducted fan optimisation framework**. To execute an optimisation, the configuration needs to be set in `./GA/config.py`. An interface may then be chosen from `main.py`, `main-parallelised.py`, or `main-parallelised-UNSGAIII.py`, where the first and last implement the U-NSGA-III algorithm, while `main-parallelised.py` implements a basic "plain" genetic algorithm. For more details on the genetic algorithm implementation, see the dedicated README.
+The `./GA/` folder contains the developed **ducted fan optimisation framework**. To execute an optimisation, the configuration needs to be set in `./GA/config.py` and in the associated `.json` files in the `./GA/config/` subfolder. An interface may then be chosen from `main.py`, `main-parallelised.py`, or `main-parallelised-UNSGAIII.py`, where the first and last implement the U-NSGA-III algorithm, while `main-parallelised.py` implements a basic "plain" genetic algorithm. For more details on the genetic algorithm implementation, see the dedicated README.
 
 The `./Submodels/` folder contains 3 MTFLOW subprocess wrappers (MTSET, MTFLO and MTSOL), and processing scripts. For a description of the different programs within MTFLOW, the reader is referred to the [MTFLOW user manual](https://web.mit.edu/drela/Public/web/mtflow/mtflow.pdf).
 
@@ -120,10 +132,11 @@ The `./Validation/` folder contains the data and summarised results used to vali
 To run the UDC or the developed optimisation framework, the dependencies listed below must be satisfied. A requirements.txt file is provided as part of this repository. To improve performance, it is suggested to install pymoo last during the installation process, using the following command, as per the instructions in the pymoo documentation. This attempts to install some of the Pymoo dependencies in compiled form, which may speed up analyses.
 
 ```console
-pip install -U pymoo==0.6.1.5
+pip install -U pymoo==0.6.2
 ```
 
-- Pymoo 0.6.1.5 (Optimisation framework only)
+- Pymoo 0.6.2 (Optimisation framework only)
+- joblib 1.6.0 (Optimisation framework only)
 - Ambiance 1.3.1
 - NumPy 2.2.1
 - SciPy 1.16.3
@@ -139,10 +152,11 @@ To run **new optimisations**, users need to install MTFLOW. In order to access a
 
 To **load and visualise optimisation results**, users can run `./GA/post.py` (does not require MTFLOW), provided the respective settings in `./GA/config.py` and the relative path to the respective optimisation results `.dill` file (see documentation in `./GA/post.py`).
 
-**Keep in mind**
+## Important Notes and Comments
 
 - The UDC and optimisation framework have been designed to work on Windows. Since version 2.0, support has been added for Linux/Unix-like systems, which offer significant computational performance improvements.
-- For best performance, it is recommended to run the optimisation framework on a computer or server with as many CPU cores/threads as possible, since each thread can be used to run one analysis. Testing of the developer shows 16 analyses can be conducted simultaneously on an AMD Ryzen 5xxx 8-core/16-thread CPU. An average design takes between 3-45 seconds to evaluate in the UDC, depending on the design, operating conditions, hardware used, and operating system.  
+- Following UDCv2.2.0, the multi-point and single-point problem definition modules have been combined into a singular unified problem_definition.py module. In the written thesis, these are still separate files. The multi_point_problem_definition.py module is retained to maintain compatibility with published datasets generated using previous UDC versions. Furthermore, the configuration has been updated to use the .json-based interface. The original config.py structure is maintained for backward compatibility.
+- For best performance, it is recommended to run the optimisation framework on a computer or server with as many CPU cores/threads as possible, since each thread can be used to run one analysis. Testing of the developer shows 16 analyses can be conducted simultaneously on an AMD Ryzen 5xxx 8-core/16-thread CPU. An average design takes between 3-45 seconds to evaluate in the UDC, depending on the design, (number of) operating conditions, hardware used, and operating system.  
 
 ## Author(s)
 
