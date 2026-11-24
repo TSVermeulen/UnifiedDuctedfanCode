@@ -6,15 +6,15 @@ Description
 ----------
 This module provides post-processing functionality for analyzing and
 visualising the results of a Pymoo optimisation. It includes methods for
-loading optimization results, extracting population data, and generating
+loading optimisation results, extracting population data, and generating
 comparative plots for axisymmetric geometries, blading data,
 and blade design profiles.
 
 Classes
 --------
 PostProcessing
-    A class to handle post-processing of optimization results,
-    including data extraction and visualization.
+    A class to handle post-processing of optimisation results,
+    including data extraction and visualisation.
 
 Examples
 --------
@@ -22,12 +22,19 @@ Examples
 >>> processing_class = PostProcessing()
 >>> processing_class.main(fname=output)
 
+See also the example usage at the bottom of the module. 
+
 Notes
 -----
-This module assumes the presence of a Pymoo optimization results file in `.dill`
+This module assumes the presence of a Pymoo optimisation results file in `.dill`
 format. It integrates with various utility modules for handling design vectors,
 parameterisations, and file operations. Ensure that the required dependencies
 and configuration files are correctly set up before using this module.
+
+Two entrypoints into the postprocessing module are available: main() and 
+compare_multiple_runs(). Main provides more details on the performance & 
+convergence of the optimisation, while compare_multiple_runs() is more suitable 
+to generate figures for publication. 
 
 References
 ----------
@@ -38,7 +45,7 @@ Versioning
 ----------
 Author: T.S. Vermeulen
 Email: T.S.Vermeulen@tudelft.nl
-Version 2.2.1
+Version 2.3.0
 
 Changelog:
 - V1.0:     Initial implementation of plotting capabilities of outputs.
@@ -53,6 +60,9 @@ Changelog:
 - V2.2.1:   Removed fname as class attribute and instead added it as an argument
             to the main method. Made plots interactive to stop code from waiting
             until plots are closed.
+- V2.3.0:   Updated to use new .json-based configuration. Fixed bugs in main() 
+            which prevented its proper usage. Updated to use consistent British 
+            spelling. 
 """
 
 # Import standard libraries
@@ -80,7 +90,7 @@ import config # type: ignore
 from Submodels.Parameterisations import AirfoilParameterisation # type: ignore
 from design_vector_interface import DesignVectorInterface # type: ignore
 from Submodels.file_handling import fileHandlingMTFLO #type: ignore
-from utils import get_figsize #type: ignore
+from utils import get_figsize, load_json_data #type: ignore
 from init_population import InitPopulation # type: ignore
 from objectives import Objectives # type: ignore
 
@@ -108,11 +118,11 @@ COLUMN_WIDTH = 256.5 # in points, for two-column layout
 
 class PostProcessing:
     """
-    A class to handle post-processing of optimization results.
+    A class to handle post-processing of optimisation results.
 
     This class provides comprehensive post-processing functionality for analyzing
-    and visualizing results from Pymoo optimizations. It supports single-analysis
-    and multi-analysis comparisons, including geometry visualization, convergence
+    and visualising results from Pymoo optimisations. It supports single-analysis
+    and multi-analysis comparisons, including geometry visualisation, convergence
     analysis, and objective space plotting.
 
     Attributes
@@ -128,15 +138,12 @@ class PostProcessing:
     """
 
     _airfoil_param = AirfoilParameterisation()  # shared, read-only
-    _objectives_class = Objectives(duct_variables=config.DUCT_VALUES,
-                                   oper=config.multi_oper,
-                                   Lref=1)  # Initialized with dummy values
 
 
     def __init__(self,
                  base_dir: Path | None = None) -> None:
         """
-        Initialization of the PostProcessing class.
+        Initialisation of the PostProcessing class.
 
         - base_dir : Path, optional
             The base directory to use when resolving relative result file paths.
@@ -153,10 +160,21 @@ class PostProcessing:
         else:
             self.base_dir = Path(base_dir)
 
+        # Load reference design data
+        self.geom = load_json_data("geometry.json")
+        self.baseline_des = load_json_data("baseline_design.json")
+        self.opt_cfg = load_json_data("optimisation.json")
+        self.oper = load_json_data("operating_conditions.json")
+
+        # Initialise objective class with dummy values
+        self._objectives_class = Objectives(duct_variables=self.baseline_des["DUCT_VALUES"],
+                                            oper=self.oper["operating_conditions"],
+                                            Lref=1)
+
 
     def load_res(self) -> Result:
         """
-        Load and return the optimization results from the specified .dill file.
+        Load and return the optimisation results from the specified .dill file.
 
         Parameters
         ----------
@@ -431,7 +449,8 @@ class PostProcessing:
             if key == "ref_blade_angle":
                 opt_val = np.rad2deg(opt_val)
             plt.bar(x[k] + (j + 1) * base_bar_width, opt_val,
-                    width=base_bar_width, label=label, color=CLRS[j])
+                    width=base_bar_width, label=label,
+                    color=CLRS[j % len(CLRS)])
 
 
     def _plot_rps_blading_parameter(self,
@@ -485,7 +504,7 @@ class PostProcessing:
                 plt.bar(x[k] + offset + (j + 1) * base_bar_width, opt_r_val,
                         width=sub_bar_width,
                         label=label,
-                        color=CLRS[j])
+                        color=CLRS[j % len(CLRS)])
 
 
     def _plot_radial_stations_parameter(self,
@@ -529,7 +548,7 @@ class PostProcessing:
             # Time 2 as the radial stations are defined over the blade radius.
             plt.bar(x[k] + (j + 1) * base_bar_width, opt_val,
                     width=base_bar_width, label=label,
-                    color=CLRS[j])
+                    color=CLRS[j % len(CLRS)])
 
 
     def _plot_blading_bar_chart(self,
@@ -607,7 +626,7 @@ class PostProcessing:
         # Format the plot
         plt.xticks(x + (base_bar_width * num_indiv) / 2, variables,
                    rotation=90)
-        plt.title("Comparison of Reference vs Optimized Design Variables")
+        plt.title("Comparison of Reference vs Optimised Design Variables")
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
 
@@ -697,18 +716,21 @@ class PostProcessing:
 
             ax[0,0].plot(opt_vals["radial_stations"] / opt_vals["radial_stations"][-1],
                         opt_vals["chord_length"],
-                        label=label, marker=MARKERS[j],
-                        linestyle=STYLE[j], color=CLRS[j], ms=MS)
+                        label=label, marker=MARKERS[j % len(MARKERS)],
+                        linestyle=STYLE[j % len(STYLE)],
+                        color=CLRS[j % len(CLRS)], ms=MS)
 
             ax[0,1].plot(opt_vals["radial_stations"] / opt_vals["radial_stations"][-1],
                         np.rad2deg(opt_vals["sweep_angle"]),
-                        label=label, marker=MARKERS[j],
-                        linestyle=STYLE[j], color=CLRS[j], ms=MS)
+                        label=label, marker=MARKERS[j % len(MARKERS)],
+                        linestyle=STYLE[j % len(STYLE)],
+                        color=CLRS[j % len(CLRS)], ms=MS)
 
             ax[1,0].plot(opt_vals["radial_stations"] / opt_vals["radial_stations"][-1],
                         np.rad2deg(opt_vals["blade_angle"]),
-                        label=label, marker=MARKERS[j],
-                        linestyle=STYLE[j], color=CLRS[j], ms=MS)
+                        label=label, marker=MARKERS[j % len(MARKERS)],
+                        linestyle=STYLE[j % len(STYLE)],
+                        color=CLRS[j % len(CLRS)], ms=MS)
 
         # Use bottom-right subplot for legend
         ax[1,1].axis('off')
@@ -740,17 +762,29 @@ class PostProcessing:
         None
         """
 
-        # Generate bar charts and sectional plots for each optimized stage
-        for stage_idx, opt_stage in enumerate(config.OPTIMIZE_STAGE):
+        # Generate bar charts and sectional plots for each optimised stage
+        for stage_idx, opt_stage in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
             if opt_stage:
+                # Main() passes the complete [individual][stage] structure.
+                # Select the stage dictionaries once and pass the resulting
+                # [individual] structure to the plotting helpers.
+                if optimised_blading and isinstance(optimised_blading[0], list):
+                    stage_blading = [
+                        individual[stage_idx]
+                        for individual in optimised_blading
+                        if len(individual) > stage_idx
+                    ]
+                else:
+                    stage_blading = optimised_blading
+
                 # Create bar chart comparison
                 self._plot_blading_bar_chart(stage_idx,
                                              reference_blading,
-                                             optimised_blading)
+                                             stage_blading)
 
                 # Create sectional data plots
                 self._plot_sectional_blading_data(reference_blading,
-                                                  optimised_blading)
+                                                  stage_blading)
 
 
     def _plot_single_blade_profile(self,
@@ -842,7 +876,7 @@ class PostProcessing:
 
         radial_coordinates = np.linspace(0,
                                          1,
-                                         config.NUM_RADIALSECTIONS[stage_idx])
+                                         self.geom["NUM_RADIALSECTIONS"][stage_idx])
         colors = plt.cm.tab10(np.linspace(0,
                                           1,
                                           len(multi_optimum_designs)))
@@ -902,7 +936,7 @@ class PostProcessing:
 
         radial_coordinates = np.linspace(0,
                                          1,
-                                         config.NUM_RADIALSECTIONS[stage_idx])
+                                         self.geom["NUM_RADIALSECTIONS"][stage_idx])
 
         for j, radial_coordinate in enumerate(radial_coordinates):
             plt.figure(f"BladeProfileComparison_R{round(radial_coordinate, 3)}_Stage{stage_idx}")
@@ -953,11 +987,11 @@ class PostProcessing:
             optimised design.
         - individual : int | str, optional
             Specifies which individual design to compare against. If "opt",
-            the optimum design from the optimization result is used. If an
+            the optimum design from the optimisation result is used. If an
             integer, the corresponding individual from the `optimised_design`
             list is used. Defaults to "opt".
         - optimised_design list[list[dict[str, Any]]], optional
-            The optimized blade design data, structured similarly to
+            The optimised blade design data, structured similarly to
             `reference_design`. Required if `individual` is an integer.
             Defaults to None.
 
@@ -975,9 +1009,9 @@ class PostProcessing:
                  _,
                  _) = DesignVectorInterface().DeconstructDesignVector(res.X)
 
-                # Plot single optimum for each optimized stage
-                for i in range(len(config.OPTIMIZE_STAGE)):
-                    if config.OPTIMIZE_STAGE[i]:
+                # Plot single optimum for each optimised stage
+                for i, opt_stage in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
+                    if opt_stage:
                         self._plot_single_optimum_design(optimised_design,
                                                          reference_design,
                                                          i,
@@ -993,9 +1027,9 @@ class PostProcessing:
                      _) = DesignVectorInterface().DeconstructDesignVector(design_dict)
                     multi_optimum_designs.append(design_opt)
 
-                # Plot multiple optima for each optimized stage
-                for i in range(len(config.OPTIMIZE_STAGE)):
-                    if config.OPTIMIZE_STAGE[i]:
+                # Plot multiple optima for each optimised stage
+                for i, opt_stage in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
+                    if opt_stage:
                         self._plot_multiple_optimum_designs(multi_optimum_designs,
                                                             reference_design,
                                                             i)
@@ -1006,9 +1040,9 @@ class PostProcessing:
 
             optimised_design = copy.deepcopy(optimised_design[individual])
 
-            # Plot individual design for each optimized stage
-            for i in range(len(config.OPTIMIZE_STAGE)):
-                if config.OPTIMIZE_STAGE[i]:
+            # Plot individual design for each optimised stage
+            for i, opt_stage in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
+                if opt_stage:
                     self._plot_single_optimum_design(optimised_design,
                                                      reference_design,
                                                      i,
@@ -1027,7 +1061,7 @@ class PostProcessing:
         Parameters
         ----------
         - res : Result
-            The optimization result containing the history of the optimisation.
+            The optimisation result containing the history of the optimisation.
 
         Returns
         -------
@@ -1316,7 +1350,7 @@ class PostProcessing:
         Parameters
         ----------
         - res : Result
-            The optimization result containing the design vector of
+            The optimisation result containing the design vector of
             the optimised design.
 
         Returns
@@ -1355,16 +1389,6 @@ class PostProcessing:
                          facecolor="tab:green",
                          s=35,
                          label="Initial MOO population")
-            plot.add(config.ref_objectives,
-                     marker="*",
-                     facecolor="tab:purple",
-                     s=35,
-                     label="SOO solution")
-            plot.add(config.frontcons_objectives,
-                     marker="+",
-                     facecolor="tab:cyan",
-                     s=35,
-                     label="SOO $g_3$ solution")
             plot.add(F_feasible,
                      facecolor='none',
                      edgecolor='black',
@@ -1405,18 +1429,6 @@ class PostProcessing:
                        alpha=0.5,
                        edgecolor="black",
                        label="Evaluated MOO designs")
-            ax.scatter(config.ref_objectives[0] * -1,
-                       config.ref_objectives[1],
-                       marker="*",
-                       s=35,
-                       facecolor="tab:purple",
-                       label="SOO solution")
-            ax.scatter(config.frontcons_objectives[0] * -1,
-                       config.frontcons_objectives[1],
-                       marker="+",
-                       facecolor="tab:cyan",
-                       s=35,
-                       label="SOO $g_3$ solution")
             ax.scatter(res.F[:,0] * -1,
                        res.F[:,1],
                        marker="o",
@@ -1496,15 +1508,15 @@ class PostProcessing:
         """
         Generate 2D and 3D comparison plots of blade geometries for each
         optimised stage compared to the reference in the ducted fan design.
-        This method visualizes the blade sections by constructing their
+        This method visualises the blade sections by constructing their
         geometry using provided blading and design data.
 
-        For each stage marked for optimization, it creates:
+        For each stage marked for optimisation, it creates:
           - A 2D plot showing the airfoil profiles at multiple radial stations.
           - A 3D plot displaying the full blade surface by stacking the airfoil
           sections along the span.
 
-        The method utilizes geometry construction and transformation utilities
+        The method utilises geometry construction and transformation utilities
         from the fileHandlingMTFLO class and airfoil coordinate conversion
         from the _airfoil_param attribute.
 
@@ -1533,14 +1545,14 @@ class PostProcessing:
 
         Notes
         -----
-        - Only stages specified in the global config.OPTIMIZE_STAGE list are
+        - Only stages specified in the global OPTIMIsE_STAGE list are
           plotted.
         """
 
         # Create plot for each stage:
         for i in range(len(blading)):
-            # Only compute the plots if the stage is to be optimized
-            if config.OPTIMIZE_STAGE[i]:
+            # Only compute the plots if the stage is to be optimised
+            if self.opt_cfg["OPTIMISE_STAGE"][i]:
                 # Set up figures for 2D and 3D plotting
                 _, ax2d = plt.subplots(figsize=(12, 8))
                 fig3d = plt.figure(figsize=(12, 8))
@@ -1643,8 +1655,8 @@ class PostProcessing:
                     # The blade pitch is defined with respect to the blade pitch
                     # angle at the reference radial station, and thus is
                     # corrected accordingly.
-                    blade_pitch = (blading[i]["blade_angle"][idx] +
-                                   blading[i]["ref_blade_angles"][0])
+                    blade_pitch = (reference_blading[i]["blade_angle"][idx] +
+                                   reference_blading[i]["ref_blade_angles"][0])
                     (rotated_upper_x,
                      rotated_upper_y,
                      rotated_lower_x,
@@ -1658,8 +1670,8 @@ class PostProcessing:
                     # station from the provided interpolant. Use it to offset
                     # the x-coordinates of the upper and lower surfaces to
                     # the correct position
-                    LE_coordinate = blading[i]["root_LE_coordinate"] + \
-                        r * np.tan(blading[i]["sweep_angle"][idx])
+                    LE_coordinate = reference_blading[i]["root_LE_coordinate"] + \
+                        r * np.tan(reference_blading[i]["sweep_angle"][idx])
                     rotated_upper_x += LE_coordinate - rotated_upper_x[0]
                     rotated_lower_x += LE_coordinate - rotated_lower_x[0]
 
@@ -1807,7 +1819,7 @@ class PostProcessing:
             design_data = [data[2]]
             blading_data = [data[3]]
 
-        # Loop over all optimized individuals for the analysis.
+        # Loop over all optimised individuals for the analysis.
         # All outputs of _extract_data are lists of the same length as
         # the number of optimum solutions.
         indices = [individual_idx] if individual_idx is not None \
@@ -1905,7 +1917,7 @@ class PostProcessing:
                                             np.flip(outline_x_TE)),
                                            axis=0)
 
-                if config.OPTIMIZE_STAGE[k]:
+                if self.opt_cfg["OPTIMISE_STAGE"][k]:
                     plt.plot(outline_x, outline_r,
                              color=color, linestyle=linestyle)
                 else:
@@ -1961,8 +1973,8 @@ class PostProcessing:
 
         for i, (fname, idx) in enumerate(zip(all_fnames, all_indices)):
             # Load in the design data for the current analysis
-            self._create_individual_meridional_plot(color=CLRS[i],
-                                                    linestyle=STYLE[i],
+            self._create_individual_meridional_plot(color=CLRS[i % len(CLRS)],
+                                                    linestyle=STYLE[i % len(STYLE)],
                                                     label=all_labels[i],
                                                     fname=fname,
                                                     reference=False,
@@ -2014,7 +2026,7 @@ class PostProcessing:
             (ux,
              uy,
              lx,
-             ly) = self._airfoil_param.ComputeProfileCoordinates(config.DUCT_VALUES)
+             ly) = self._airfoil_param.ComputeProfileCoordinates(self.baseline_des["DUCT_VALUES"])
             return np.concatenate((ux,
                                    np.flip(lx))), np.concatenate((uy,
                                                                   np.flip(ly)))
@@ -2032,8 +2044,8 @@ class PostProcessing:
                 opt_y = np.concatenate((uy, np.flip(ly)))
                 ax.plot(opt_x, opt_y,
                         label=all_labels[i],
-                        color=CLRS[i],
-                        linestyle=STYLE[i])
+                        color=CLRS[i % len(CLRS)],
+                        linestyle=STYLE[i % len(STYLE)])
 
         def create_profile_only_figure():
             fig, ax = plt.subplots(figsize=get_figsize(wf=0.75, columnwidth=COLUMN_WIDTH))
@@ -2072,8 +2084,8 @@ class PostProcessing:
                 axs[0].plot(opt_x,
                             opt_y,
                             label=all_labels[i],
-                            color=CLRS[i],
-                            linestyle=STYLE[i])
+                            color=CLRS[i % len(CLRS)],
+                            linestyle=STYLE[i % len(STYLE)])
 
 
                 (bez_thick,
@@ -2083,7 +2095,7 @@ class PostProcessing:
                 (bez_thick_ref,
                  bx_thick_ref,
                  bez_camb_ref,
-                 bx_camb_ref) = self._airfoil_param.ComputeBezierCurves(config.DUCT_VALUES)
+                 bx_camb_ref) = self._airfoil_param.ComputeBezierCurves(self.baseline_des["DUCT_VALUES"])
                 axs[1].plot(bx_thick_ref,
                             bez_thick_ref,
                             linestyle="-",
@@ -2098,13 +2110,13 @@ class PostProcessing:
                 axs[1].plot(bx_thick,
                             bez_thick,
                             label=all_labels[i],
-                            color=CLRS[i],
-                            linestyle=STYLE[i])
+                            color=CLRS[i % len(CLRS)],
+                            linestyle=STYLE[i % len(STYLE)])
                 axs[2].plot(bx_camb,
                             bez_camb,
                             label=all_labels[i],
-                            color=CLRS[i],
-                            linestyle=STYLE[i])
+                            color=CLRS[i % len(CLRS)],
+                            linestyle=STYLE[i % len(STYLE)])
 
             axs[0].set_ylabel("Vertical coordinate $y/c$ [-]")
             axs[0].minorticks_on()
@@ -2198,9 +2210,9 @@ class PostProcessing:
 
 
         # Load reference design
-        reference_design = config.STAGE_DESIGN_VARIABLES
+        reference_design = self.baseline_des["design_parameters"]
 
-        num_radial = config.NUM_RADIALSECTIONS[stage_idx]
+        num_radial = self.geom["NUM_RADIALSECTIONS"][stage_idx]
         radial_coords = np.linspace(0, 1, num_radial)
 
         # Layout: 2 plots per row max
@@ -2221,8 +2233,8 @@ class PostProcessing:
                 self._plot_single_blade_profile(design[stage_idx],
                                                 j,
                                                 label=all_labels[i],
-                                                color=CLRS[i],
-                                                linestyle=STYLE[i])
+                                                color=CLRS[i % len(CLRS)],
+                                                linestyle=STYLE[i % len(STYLE)])
 
             self._plot_reference_blade_profile(reference_design,
                                                stage_idx,
@@ -2308,7 +2320,7 @@ class PostProcessing:
         data = vec_interface.DeconstructDesignVector(reference_vector)
         reference_blading = data[3]
 
-        for stage_idx, is_optimised in enumerate(config.OPTIMIZE_STAGE):
+        for stage_idx, is_optimised in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
             if is_optimised:
                 # Prepare stage-specific data to satisfy your existing functions
                 optimised_stage_blading = [opt[stage_idx] for
@@ -2362,7 +2374,7 @@ class PostProcessing:
         data = vec_interface.DeconstructDesignVector(reference_vector)
         reference_blading = data[3]
 
-        for stage_idx, is_optimised in enumerate(config.OPTIMIZE_STAGE):
+        for stage_idx, is_optimised in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
             if is_optimised:
                 optimised_stage_blading = [opt[stage_idx] for
                                            opt in all_blading_data]
@@ -2415,7 +2427,7 @@ class PostProcessing:
             duct_data = decomposed_data[1]
 
             # Compute the area objective corresponding to the design vector.
-            # Use the initialized objectives class to avoid repeated object
+            # Use the initialised objectives class to avoid repeated object
             # creation and destruction
             self._objectives_class.duct_variables = duct_data
             area_objective = self._objectives_class.FrontalArea({})
@@ -2499,10 +2511,10 @@ class PostProcessing:
 
             ax.scatter(F_feasible[:,0] * -1, F_feasible[:,1],
                        marker='o', facecolor="none", s=20, alpha=0.3,
-                       edgecolors=CLRS[i], label=f"Evaluated designs")
+                       edgecolors=CLRS[i % len(CLRS)], label=f"Evaluated designs")
             ax.scatter(F_opt[:,0] * -1, F_opt[:,1],
                        marker="X", color="tab:orange", s=100,
-                       label="Optimized design")
+                       label="Optimised design")
             ax.scatter(F_initial_feasible[0,0] * -1, F_initial_feasible[0,1],
                        s=50, marker="H", color="tab:red",
                        label="Reference design")
@@ -2604,6 +2616,14 @@ class PostProcessing:
         res = self.load_res()
         self.extract_population_data(res)
 
+        # Deconstruct the reference design into the same plotting-ready
+        # shape as the population extracted from the .dill result.
+        reference_vector = InitPopulation().DeconstructDictFromReferenceDesign()
+        vec_interface = DesignVectorInterface()
+        reference_blading = vec_interface.DeconstructDesignVector(
+            reference_vector
+        )[3]
+
         print("Original solution:")
         print(res.history[0].pop[0].get("F"))
         print("Optimum individual(s):")
@@ -2623,45 +2643,45 @@ class PostProcessing:
         plt.show()
 
         # Plot the centerbody designs
-        if config.OPTIMIZE_CENTERBODY:
+        if self.opt_cfg["OPTIMISE_CENTERBODY"]:
             # First plot the complete final population
-            self.compare_axisymmetric_geometry(config.CENTERBODY_VALUES,
+            self.compare_axisymmetric_geometry(self.baseline_des["CENTERBODY_VALUES"],
                                                self.CB_data)
             plt.show()
 
             # Plot the optimum solution set
-            self.compare_axisymmetric_geometry(config.CENTERBODY_VALUES,
+            self.compare_axisymmetric_geometry(self.baseline_des["CENTERBODY_VALUES"],
                                                self.CB_data_opt)
             plt.show()
 
         # Plot the duct designs
-        if config.OPTIMIZE_DUCT:
+        if self.opt_cfg["OPTIMISE_DUCT"]:
             # First plot the complete final population
-            self.compare_axisymmetric_geometry(config.DUCT_VALUES,
+            self.compare_axisymmetric_geometry(self.baseline_des["DUCT_VALUES"],
                                                self.duct_data)
             plt.show()
 
             # Plot the optimum solution set
-            self.compare_axisymmetric_geometry(config.DUCT_VALUES,
+            self.compare_axisymmetric_geometry(self.baseline_des["DUCT_VALUES"],
                                                self.duct_data_opt)
             plt.show()
 
         # Plot the optimised stage designs
-        for i in range(len(config.OPTIMIZE_STAGE)):
-
-            if config.OPTIMIZE_STAGE[i]:
-                # First plot the complete final population
-                self.compare_blading_data(config.STAGE_BLADING_PARAMETERS,
-                                          self.blading_data)
-                plt.show()
+        for i, opt_stage in enumerate(self.opt_cfg["OPTIMISE_STAGE"]):
+            if opt_stage:
+                # Uncomment below if you want to plot the complete final 
+                # population
+                # self.compare_blading_data(reference_blading,
+                #                           self.blading_data)
+                # plt.show()
 
                 # Plot the optimum solution set
-                self.compare_blading_data(config.STAGE_BLADING_PARAMETERS,
+                self.compare_blading_data(reference_blading,
                                           self.blading_data_opt)
                 plt.show()
 
                 # Plot the optimum solution set
-                self.compare_blade_design_data(reference_design=config.STAGE_DESIGN_VARIABLES,
+                self.compare_blade_design_data(reference_design=self.baseline_des["design_parameters"],
                                                res=res,
                                                individual="opt")
                 plt.show()
@@ -2670,8 +2690,8 @@ class PostProcessing:
                 for j in range(len(self.blading_data_opt)):
                     self.create_blade_geometry_plots(self.blading_data_opt[j],
                                                      self.design_data_opt[j],
-                                                     config.STAGE_BLADING_PARAMETERS,
-                                                     config.STAGE_DESIGN_VARIABLES)
+                                                     reference_blading,
+                                                     self.baseline_des["design_parameters"])
                     plt.show()
         plt.show(block=True)
 
@@ -2683,21 +2703,21 @@ if __name__ == "__main__":
     # results files which are post-processed, as the post-processing
     # relies on the configuration for correct data extraction and plotting.
 
-    # Initialize the post-processing class
+    # Initialise the post-processing class
     processing_class = PostProcessing()
 
     # Multi-point single-objective results for the endurance mission
     # print("Post-processing the multi-point single-objective results for the endurance mission...")
     # processing_class.compare_multiple_runs(fnames=[Path("Results/res_pop200_eval500_251124182952404967.dill")],
-    #                                        labels=["Optimized"])
+    #                                        labels=["Optimised"])
 
     # Single-point single-objective results for the endurance cruise condition.
     print("Post-processing the single-point single-objective results for the endurance cruise condition...")
     processing_class.compare_multiple_runs(fnames=[Path("Results/res_pop200_eval500_251119042735540563.dill")],
-                                           labels=["Optimized"])
+                                           labels=["Optimised"])
 
     # Note how the "normal" main method can also be used to generate more
     # in-depth results. compare_multiple_runs() does not analyse the
     # performance/convergence of the analysis, which main() does.
-    # print("Post-processing the single-point single-objective results for the endurance cruise condition with the main method...")
-    # processing_class.main(fname=Path("Results/res_pop200_eval500_251119042735540563.dill"))
+    print("Post-processing the single-point single-objective results for the endurance cruise condition with the main method...")
+    processing_class.main(fname=Path("Results/res_pop200_eval500_251119042735540563.dill"))
