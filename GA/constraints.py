@@ -160,7 +160,6 @@ class Constraints:
         - Thrust : float
             A float of the thrust in Newtons
         """
-        print(self.oper)
         return analysis_outputs["data"]["Total force CT"] * \
             (0.5 * self.oper["atmos"].density[0] * self.oper["Vinl"] ** 2 * \
              Lref ** 2)
