@@ -138,13 +138,13 @@ pip install -U pymoo==0.6.2
 - Pymoo 0.6.2 (Optimisation framework only)
 - joblib 1.6.0 (Optimisation framework only)
 - Ambiance 1.3.1
-- NumPy 2.2.1
+- NumPy 2.5.5
 - SciPy 1.16.3
 - Matplotlib 3.10.7
 - Dill 0.4.0 (Optimisation framework only)
 - Pandas 2.3.3
 
-Use the `./requirements.txt` file to install all dependencies and the corresponding versions. As a reference, the tools and frameworks were developed using Python 3.12.8. Although the author sees no issues with usage at other Python versions, no guarantees are given.
+Use the `./requirements.txt` file to install all dependencies and the corresponding versions. As a reference, the tools and frameworks were developed using Python 3.12.8. The UDC has been verified to work using the newer Python 3.14.10 as well. Although the author sees no issues with usage at other Python versions, no guarantees are given.
 
 ### Usage
 
