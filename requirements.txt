@@ -16,7 +16,7 @@ joblib==1.6.0
 kiwisolver==1.4.9
 matplotlib==3.10.7
 moocore==0.3.2
-numpy==2.2.1
+numpy==2.5.5
 packaging==25.0
 pandas==2.3.3
 pillow==12.2.0
